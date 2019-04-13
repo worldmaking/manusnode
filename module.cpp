@@ -1,69 +1,79 @@
 // hello.cc using N-API
 #include <node_api.h>
+// #include "napi.h"
+
 #include <stdio.h>
 
 #include <apollosdk.hpp>
 
-namespace demo {
+// #define
 
-  apollo_handle_t apollo_session = 0;
+namespace ApolloConnector {
 
+  apollo_handle_t sessionHandle = 0;
+  // apollo_source_t // sourceType == SOURCE_DEVICEDATA 
+  // ApolloPacketBinary
+  // ApolloSourceInfo 
+  // ApolloRawData // glove - raw
+  // ApolloJointData // joint - stream
+  // ApolloDeviceInfo // sourceType == SOURCE_DEVICEDATA 
 
-  void handleApolloErrors(void* userdata, apollo_handle_t session, uint16_t errCode, const char * errMsg) {
+  void handleApolloErrors(void* callbackReturn, apollo_handle_t session, uint16_t errCode, const char * errMsg) {
     printf("error %d %s\n", errCode, errMsg);
   }
 
-  void handleApolloHandShake(void *callbackReturn, apollo_handle_t session, const ApolloPacketBinary * const packet) {
-    if (session == apollo_session) {
+  void handleApolloHandshake(void* callbackReturn, apollo_handle_t session, const ApolloPacketBinary * const packetToReturn) {
+    if (session == sessionHandle) {
         printf("got a handshake\n");
-        //std::vector<char> netPacket(packet->bytes);
-        //netPacket.data() = packet->payload;
+        //std::vector<char> netPacket(packetToReturn->bytes);
+        //netPacket.data() = packetToReturn->payload;
         //instance->tcpWrite(netPacket);    // assuming the connector class also handles TCP transactions on a socket
    }
   }
 
-  void successfulApolloHandShake(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const char * successMsg) {
+  void handleSuccessfulHandshake(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const char * successMsg) {
     printf("eventID: %d  |  success: %s\n", eventID, successMsg);
   }
 
-  void failedApolloHandShake(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const char * failMsg) {
+  void handleFailedHandshake(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const char * failMsg) {
     printf("eventID: %d  |  fail: %s\n", eventID, failMsg);
   }
 
-  void registerDataStreamHandler(void* callbackReturn, apollo_handle_t session, const ApolloJointData* const jointData) {
+  void handleDataStream(void* callbackReturn, apollo_handle_t session, const ApolloJointData * const jointData) {
     printf("streaming..");
   }
 
-  void registerSourcesListHandler(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const U64Array* const sourceList) {
+  void handleSourcesList(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const U64Array * const sourceList) {
     printf("eventID: %d  |  sources: %s\n", eventID, sourceList);
   }
 
-  void registerSourceInfoHandler(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const ApolloSourceInfo* const info) {
+  void handleSourceInfo(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const ApolloSourceInfo * const info) {
     printf("eventID: %d  |  source info: %s\n", eventID, info);
   }
 
 
 
   napi_value openSession(napi_env env, napi_callback_info args) {
-    napi_value greeting;
     napi_status status;
+    napi_value greeting;
 
     // start a session with apollo
-    apollo_session = apolloOpenSession(1234);
-    printf("session %I64u\n", apollo_session);
+    sessionHandle = apolloOpenSession(1234);
+    printf("session %I64u\n", sessionHandle);
 
-    registerHandshakePacketHandler(apollo_session, 0, handleApolloHandShake);
-    registerSuccessHandler(apollo_session, 0, successfulApolloShake);
-    registerFailHandler(apollo_session, 0, failedApolloShake);
-    registerDataStreamHandler();
-    registerSourcesListHandler();
-    registerSourceInfoHandler();
+    // register handlers with apollo
+    registerHandshakePacketHandler(sessionHandle, 0, handleApolloHandshake);
+    registerSuccessHandler(sessionHandle, 0, handleSuccessfulHandshake);
+    registerFailHandler(sessionHandle, 0, handleFailedHandshake);
+    registerDataStreamHandler(sessionHandle, 0, handleDataStream);
+    registerSourcesListHandler(sessionHandle, 0, handleSourcesList);
+    registerSourceInfoHandler(sessionHandle, 0, handleSourceInfo);
 
 
-    status = napi_create_string_utf8(env, "...test", NAPI_AUTO_LENGTH, &greeting);
+    status = napi_create_string_utf8(env, "...testing", NAPI_AUTO_LENGTH, &greeting);
     if (status != napi_ok) return nullptr;
     return greeting;
-  }
+  }  // napi openSession
 
   napi_value init(napi_env env, napi_value exports) {
     napi_status status;
@@ -75,11 +85,11 @@ namespace demo {
     status = napi_create_function(env, nullptr, 0, openSession, nullptr, &fn);
     if (status != napi_ok) return nullptr;
 
-    status = napi_set_named_property(env, exports, "hello", fn);
+    status = napi_set_named_property(env, exports, "connectApollo", fn);
     if (status != napi_ok) return nullptr;
     return exports;
-  }
+  }  // napi init
 
   NAPI_MODULE(NODE_GYP_MODULE_NAME, init);
 
-}  // namespace demo
+}  // namespace ApolloConnector
