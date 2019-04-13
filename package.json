@@ -1,0 +1,26 @@
+{
+  "name": "manusnode",
+  "version": "0.0.1",
+  "description": "Node.js bindings for Manus VR gloves",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/worldmaking/manusnode.git"
+  },
+  "keywords": [
+    "VR",
+    "hands"
+  ],
+  "author": "Alice Lab @ York University",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/worldmaking/manusnode/issues"
+  },
+  "homepage": "https://github.com/worldmaking/manusnode#readme",
+  "dependencies": {
+    "node-api": "0.0.1"
+  }
+}
