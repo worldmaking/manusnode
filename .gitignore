@@ -62,3 +62,6 @@ typings/
 
 # locally added
 TestManus/
+ApolloConnector.h
+ApolloConnector.cc
+module_copy.cc

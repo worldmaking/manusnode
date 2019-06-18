@@ -38,21 +38,22 @@ namespace ApolloConnector {
   }
 
   void handleApolloHandshake(void* callbackReturn, apollo_handle_t session, const ApolloPacketBinary * const packetToReturn) {
+    napi_env env = (napi_env)callbackReturn;
     napi_status status;
     if (session == sessionHandle) {
-        printf("got a handshake\n");
+        printf("got a handshake %p \n", env);
 
         napi_value eventname;
         napi_value function;
-        napi_create_string_utf8(temp_env, strHandshake, strlen(strHandshake), &eventname);
+        status = napi_create_string_utf8(env, strHandshake, strlen(strHandshake), &eventname);
 
-        status = napi_get_property(temp_env, sessionObject, eventname, &function);
+        status = napi_get_property(env, sessionObject, eventname, &function);
 
         napi_value thethis = nullptr;
         int argc = 0;
         //napi_value argv[];
         napi_value result;
-        napi_call_function(temp_env, thethis, function, 0, nullptr, &result);
+        status = napi_call_function(env, thethis, function, 0, nullptr, &result);
         
         //napi_set_property(env, sessionObject, eventname, argv[1]);
 
@@ -235,13 +236,13 @@ namespace ApolloConnector {
 
     // start a session with apollo
     sessionHandle = apolloOpenSession(0);
-    printf("session %I64u\n", sessionHandle);
+    printf("session %I64u in env %p\n", sessionHandle, env);
 
     // an empty object we can use to store JS callbacks etc.
     napi_create_object(env, &sessionObject);
 
     // register handlers with apollo
-    registerHandshakePacketHandler(sessionHandle, 0, handleApolloHandshake);
+    registerHandshakePacketHandler(sessionHandle, env, handleApolloHandshake);
     registerSuccessHandler(sessionHandle, 0, handleSuccessfulHandshake);
     registerFailHandler(sessionHandle, 0, handleFailedHandshake);
     registerDataStreamHandler(sessionHandle, 0, handleDataStream);
