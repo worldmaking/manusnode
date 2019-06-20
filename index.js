@@ -1,5 +1,5 @@
 // hello.js
-const manus = require('../build/Release/manusnode');
+const manus = require('bindings')('manusnode');
 
 const net = require('net')
 
