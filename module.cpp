@@ -1,39 +1,9 @@
-// hello.cc using N-API
 #include <node_api.h>
-// #include "napi.h"
+#include <apollosdk.hpp>
 
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-
-#include <apollosdk.hpp>
-
-/*
-Usage:
-
-// in client connect():
-
-// open session & register handlers:
-session = manus.open({
-  onHandshake: function(arraybuf) {
-    ...
-  },
-  // etc.
-});
-
-// send to client:
-client.write(Buffer.from(manus.handshake()));
-
-// in client.on("data):
-
-// will call the session's registered handlers
-session.process(data.buffer)
-
-// maybe later?
-session.on("handshake", function() {...})  
-
-  */
-
 
 // a C++ struct to hold all the persistent JS objects we need for an Apollo session:
 struct PersistentSessionData {
