@@ -1,7 +1,7 @@
 {
     "targets": [{
         "target_name": "manusnode",
-        "sources": ["src/module.cpp"],
+        "sources": ["module.cpp"],
         "include_dirs": [
             "../resources_2018_09_18_Apollo-SDK-1.1.1_Windows/release/include"
         ],

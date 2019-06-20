@@ -1,4 +1,6 @@
 # manusnode
-# testing
 
-# June 18 2019 - uploading anything new .. what can we remove in lib/ are these extra files? etc
+Talking to the Apollo Manus VR driver from Node.js
+
+*Currently building against the ManusVR SDK 1.1.1*
+

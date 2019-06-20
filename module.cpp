@@ -49,6 +49,17 @@ void handleApolloErrors(void* callbackReturn, apollo_handle_t session, uint16_t 
   fprintf(stderr, "error %d %s\n", errCode, errMsg);
 }
 
+// end a session
+// session.close()
+napi_value close(napi_env env, napi_callback_info args) {
+  size_t argc = 0; // how many args we want
+  PersistentSessionData * data; // the C++ data we can associate with a function
+  assert(napi_get_cb_info(env, args, &argc, nullptr, nullptr, (void **)&data) == napi_ok);
+
+  apolloCloseSession(data->sessionHandle);
+
+  return nullptr;
+}
 
 // session.process(arraybuffer)
 // will trigger the various handlers registered for the session
@@ -80,7 +91,6 @@ napi_value process(napi_env env, napi_callback_info args) {
 }
 
 napi_value handshake(napi_env env, napi_callback_info args) {
-  napi_status status;
   size_t argc = 1; // how many args we want
   napi_value argv[1];
   PersistentSessionData * data; // the C++ data we can associate with a function
@@ -168,7 +178,7 @@ void handleSourcesList(void* callbackReturn, apollo_handle_t session, uint16_t e
 
 void handleSourceInfo(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const ApolloSourceInfo * const info) {
   // want L/R side from ApolloSoureInfo struct -> apollo_laterality_t
-  printf("eventID: %d  |  source info: %d\n", eventID, info);
+  printf("eventID: %d  |  source info: %p\n", eventID, info);
 }
 
 napi_value open(napi_env env, napi_callback_info info) {
@@ -208,6 +218,10 @@ napi_value open(napi_env env, napi_callback_info info) {
   assert(napi_create_reference(env, sessionObject, 1, &data->sessionRef) == napi_ok);
   
   napi_value fn;
+
+  assert(napi_create_function(env, "close", 0, close, data, &fn) == napi_ok);
+  assert(napi_set_named_property(env, sessionObject, "close", fn) == napi_ok);
+
   assert(napi_create_function(env, "handshake", 0, handshake, data, &fn) == napi_ok);
   assert(napi_set_named_property(env, sessionObject, "handshake", fn) == napi_ok);
 
@@ -220,7 +234,6 @@ napi_value open(napi_env env, napi_callback_info info) {
 }
 
 napi_value init(napi_env env, napi_value exports) {
-  napi_status status;
   napi_value fn;
 
   // apollo setup
