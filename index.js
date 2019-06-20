@@ -65,8 +65,8 @@ client.connect(PORT, HOST, function() {
 
     client.on('data', function(data) {
         console.log('DATA: ' + data);
-        let result = session.process(data.buffer);
-        console.log(result);
+        // invoke the session's handlers for this packet:
+        session.process(data.buffer);
     })
     
     client.on('close', function() {
