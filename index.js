@@ -1,4 +1,3 @@
-// hello.js
 const manus = require('bindings')('manusnode');
 
 const net = require('net')
@@ -13,6 +12,11 @@ client.connect(PORT, HOST, function() {
     let session = manus.open({
         onHandshake: function(arraybuf) {
             console.log("got handshake with buffer", arraybuf)
+
+            // assuming handshake is OK
+
+            // request streams to start (use session.stop() to end them)
+            session.start();
         }
     });
 
@@ -24,10 +28,12 @@ client.connect(PORT, HOST, function() {
     
     client.on('close', function() {
         console.log('Connection closed')
+        session.close();
     })
     
     client.on('error', function(err) {
         console.log("socket error", err) 
+        // disconnect client & session.close() ?
     })
     
     // try to handshake with Apollo:
