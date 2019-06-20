@@ -64,7 +64,7 @@ napi_value process(napi_env env, napi_callback_info args) {
   // verify args[0] is an arraybuffer
   uint32_t * abdata;
   size_t nbytes;
-  status = napi_get_arraybuffer_info(env, argv[0], &(void *)abdata, &nbytes);
+  status = napi_get_arraybuffer_info(env, argv[0], (void **)&abdata, &nbytes);
   //printf("found data %d %i\n", nbytes, abdata[0]);
 
   // outgoing packet to Apollo:
@@ -122,8 +122,8 @@ napi_value handshake(napi_env env, napi_callback_info args) {
 
 
 // an example Apollo handler calling back into a registered JS function:
-void handleApolloHandshake(void * callbackReturn, apollo_handle_t session, const ApolloPacketBinary * const packetToReturn) {
-  SessionData * data = (SessionData *)callbackReturn;
+void handleHandshake(void * callbackReturn, apollo_handle_t session, const ApolloPacketBinary * const packetToReturn) {
+  PersistentSessionData * data = (PersistentSessionData *)callbackReturn;
 
   // pull the session object back out of the napi_ref:
 	napi_value sessionObject; 
@@ -139,9 +139,9 @@ void handleApolloHandshake(void * callbackReturn, apollo_handle_t session, const
 
   // create arraybuffer from the ApolloPacketBinary:
   void * abdata;
-  napi_create_arraybuffer(data->env, packetToReturn.bytes+4, &abdata, &argv[0]);
-  memcpy(((char *)abdata)+4, packetToReturn.payload, packetToReturn.bytes);
-  ((uint32_t *)(abdata))[0] = packetToReturn.bytes;
+  napi_create_arraybuffer(data->env, packetToReturn->bytes+4, &abdata, &argv[0]);
+  memcpy(((char *)abdata)+4, packetToReturn->payload, packetToReturn->bytes);
+  ((uint32_t *)(abdata))[0] = packetToReturn->bytes;
 
   // pass this as an argument to the registered callback:
 	napi_value result;
@@ -188,7 +188,7 @@ napi_value open(napi_env env, napi_callback_info info) {
   // we'll need to store references to them in our PersistentSessionData to prevent garbage collection
   napi_value handler;
   // TODO: check for existence before registering?
-  napi_get_named_property(env, args[0], "onHandshake", handler);
+  napi_get_named_property(env, args[0], "onHandshake", &handler);
   napi_create_reference(env, handler, 1, &data->onHandshakeRef);
 
   // and also register the corresponding events with Apollo:
@@ -206,7 +206,8 @@ napi_value open(napi_env env, napi_callback_info info) {
   napi_value sessionObject;
   assert(napi_create_object(env, &sessionObject) == napi_ok);
   assert(napi_create_reference(env, sessionObject, 1, &data->sessionRef) == napi_ok);
-    
+  
+  napi_value fn;
   assert(napi_create_function(env, "handshake", 0, handshake, data, &fn) == napi_ok);
   assert(napi_set_named_property(env, sessionObject, "handshake", fn) == napi_ok);
 
@@ -215,7 +216,7 @@ napi_value open(napi_env env, napi_callback_info info) {
 
   // TODO: more session methods, including the various generators, and also a close() to delete PersistentSessionData and destroy the references it contains
 
-  return sessionObject
+  return sessionObject;
 }
 
 napi_value init(napi_env env, napi_value exports) {
