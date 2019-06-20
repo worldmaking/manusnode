@@ -25,6 +25,8 @@ client.connect(PORT, HOST, function() {
             // we set event == 1 for the handshake in session.handshake(0):
             if (eventId == 1) {
             // then, generateListSources > sourceListHandler > generateAddStreams (for each endpoint source) > successHandler > generateSetStreamData (for each stream) > sucessHandler(s) > generateStartStreams > successHandler, dataStreamHandlers
+
+                //client.write(Buffer.from(session.start()))
             }
             // etc.
         },

@@ -251,7 +251,6 @@ void handleSuccess(void* callbackReturn, apollo_handle_t session, uint16_t event
 	// call it: 
   int argc = 2;
   napi_value argv[2];
-
   assert(napi_create_int32(data->env, eventID, &argv[0]) == napi_ok);
   assert(napi_create_string_utf8(data->env, successMsg, strlen(successMsg), &argv[1]) == napi_ok);
 
