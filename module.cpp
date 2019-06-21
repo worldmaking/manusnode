@@ -299,7 +299,7 @@ void handleSourcesList(void* callbackReturn, apollo_handle_t session, uint16_t e
 	napi_get_reference_value(data->env, data->sessionRef, &sessionObject);
   
   // generate list of sources connected to Apollo, i.e., L and R glove
-  printf("eventID: %d  |  sources: %s\n", eventID, sourceList);
+  printf("eventID: %d  |  sources: %p\n", eventID, sourceList);
 }
 
 void handleSourceInfo(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const ApolloSourceInfo * const info) {
