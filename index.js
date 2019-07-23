@@ -14,9 +14,10 @@ client.connect(PORT, HOST, function() {
             console.log("NODE: got handshake with args", packet)
 
             // send the packet back to server to confirm:
-            client.write(Buffer.from(packet));
-
-            
+            let buf = Buffer.from(packet)
+            console.log(buf)
+            client.write(buf);
+            console.log("NODE: sent handshake back to server to confirm")
         },
         onSuccess: function(eventId, ...args) {
             console.log("NODE: got success with args", eventId, args.join(","));
@@ -24,13 +25,18 @@ client.connect(PORT, HOST, function() {
 
             // we set event == 1 for the handshake in session.handshake(0):
             if (eventId == 1) {
-                console.log('NODE: onSuccess eventId = ', eventId)
+                console.log('NODE: Success eventId = ', eventId)
+                eventId++;
+                client.write(Buffer.from(session.listSources( eventId )));
+                console.log("NODE: listSources eventId = ", eventId);
+                eventId++;
+                client.write(Buffer.from(session.getSourceInfo( eventId )));  
+                console.log("NODE: getSourcesInfo eventId = ", eventId);
                 // then, 
                 // generateListSources > sourceListHandler >
                 // generateAddStreams (for each endpoint source) > successHandler > 
                 // generateSetStreamData (for each stream) > successHandler(s) > 
                 // generateStartStreams > successHandler, dataStreamHandlers
-
                 //client.write(Buffer.from(session.start()))
             }
             // etc.
@@ -78,9 +84,10 @@ client.connect(PORT, HOST, function() {
     });
 
     client.on('data', function(data) {
-        console.log('NODE: DATA: ' + data);
+        console.log('NODE: new packet DATA: ' + data);
         // invoke the session's handlers for this packet:
         session.process(data.buffer);
+        console.log("NODE: data processed")
     })
     
     client.on('close', function() {

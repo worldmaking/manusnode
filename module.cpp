@@ -433,19 +433,22 @@ napi_value process(napi_env env, napi_callback_info args) {
   apb.payload = ((char *)(abdata))+4;
   apolloProcessPacket(data->sessionHandle, &apb);
 
-  // cleanup
-  apolloDisposePacket(apb);
 
+  // cleanup? (crashes, so commented it out)
+  //apolloDisposePacket(apb);
+
+  printf("CPP: process complete\n");
   return nullptr;
 }
 
 // end a session
 // session.close()
 napi_value close(napi_env env, napi_callback_info args) {
+  printf("CPP: close session");
   size_t argc = 0; // how many args we want
   PersistentSessionData * data; // the C++ data we can associate with a function
   assert(napi_get_cb_info(env, args, &argc, nullptr, nullptr, (void **)&data) == napi_ok);
-
+  
   apolloCloseSession(data->sessionHandle);
 
   return nullptr;
@@ -453,19 +456,31 @@ napi_value close(napi_env env, napi_callback_info args) {
 
 // Apollo handlers calling back into the registered JS functions:
 
-void handleHandshake(void *callbackReturn, apollo_handle_t session, const ApolloPacketBinary *packetToReturn) {
+void handleHandshake(void* callbackReturn, apollo_handle_t session, const ApolloPacketBinary * packetToReturn) {
   PersistentSessionData * data = (PersistentSessionData *)callbackReturn;
 
   printf("CPP: handleHandshake with packet %p\n", packetToReturn);
 
+  printf("CPP: data pointer is %p; env %p, object %p callback %p\n", data, data->env, data->sessionRef, data->onHandshakeRef);
+
   // pull the session object back out of the napi_ref:
 	napi_value sessionObject; 
-	napi_get_reference_value(data->env, data->sessionRef, &sessionObject);
+	assert(napi_ok == napi_get_reference_value(data->env, data->sessionRef, &sessionObject));
+
+  napi_valuetype resultType;
+  napi_typeof(data->env, sessionObject, &resultType);
+  assert(resultType == napi_object);
+
+ // printf("CPP: handleHandshake with object %p\n", sessionObject);
 
   // pull the callback function back out of the napi_ref:
 	napi_value callback; 
-	napi_get_reference_value(data->env, data->onHandshakeRef, &callback);
+	assert(napi_ok == napi_get_reference_value(data->env, data->onHandshakeRef, &callback));
+  napi_typeof(data->env, callback, &resultType);
+  assert(resultType == napi_function);
 	
+  printf("CPP: handleHandshake with callback %p\n", callback);
+
 	// call it: 
   int argc = 1;
   napi_value argv[1];
@@ -479,6 +494,8 @@ void handleHandshake(void *callbackReturn, apollo_handle_t session, const Apollo
   // pass this as an argument to the registered callback:
 	napi_value result;
 	assert(napi_call_function(data->env, sessionObject, callback, argc, argv, &result) == napi_ok);
+
+  printf("CPP: handleHandshake complete\n");
 }
 
 void handleSuccess(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const char * successMsg) {
@@ -488,7 +505,11 @@ void handleSuccess(void* callbackReturn, apollo_handle_t session, uint16_t event
 	napi_value sessionObject; 
 	napi_get_reference_value(data->env, data->sessionRef, &sessionObject);
 
-  printf("CPP: eventID: %d  |  success: %s\n", eventID, successMsg);
+  napi_valuetype resultType;
+  napi_typeof(data->env, sessionObject, &resultType);
+  assert(resultType == napi_object);
+
+  printf("CPP: eventID: %d  |  success: %p\n", eventID, successMsg);
 
   // pull the callback function back out of the napi_ref:
 	napi_value callback; 
@@ -574,8 +595,29 @@ void handleSourcesList(void* callbackReturn, apollo_handle_t session, uint16_t e
 	napi_value sessionObject; 
 	napi_get_reference_value(data->env, data->sessionRef, &sessionObject);
   
+  napi_valuetype resultType;
+  napi_typeof(data->env, sessionObject, &resultType);
+  assert(resultType == napi_object);
+
   // generate list of sources connected to Apollo, i.e., L and R glove
   printf("CPP: eventID: %d  |  sources: %p\n", eventID, sourceList);
+
+  // pull the callback function back out of the napi_ref:
+	napi_value callback; 
+	napi_get_reference_value(data->env, data->onSourceListRef, &callback);
+	
+	// call it: 
+  int argc = 2;
+  napi_value argv[2];
+  assert(napi_create_int32(data->env, eventID, &argv[0]) == napi_ok);
+  assert(napi_create_array_with_length(data->env, sizeof(sourceList), &argv[1]) == napi_ok);
+  
+  //printf("CPP: second time>>> eventID: %d  |  sources: %p\n", eventID, sourceList);
+
+  // pass this as an argument to the registered callback:
+	napi_value result;
+	assert(napi_call_function(data->env, sessionObject, callback, argc, argv, &result) == napi_ok);
+
 }
 
 void handleSourceInfo(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const ApolloSourceInfo * const info) {
@@ -585,8 +627,28 @@ void handleSourceInfo(void* callbackReturn, apollo_handle_t session, uint16_t ev
 	napi_value sessionObject; 
 	napi_get_reference_value(data->env, data->sessionRef, &sessionObject);
   
+  napi_valuetype resultType;
+  napi_typeof(data->env, sessionObject, &resultType);
+  assert(resultType == napi_object);
+
   // want L/R side from ApolloSoureInfo struct -> apollo_laterality_t
   printf("CPP: eventID: %d  |  source info: %p\n", eventID, info);
+
+  // pull the callback function back out of the napi_ref:
+	napi_value callback; 
+	napi_get_reference_value(data->env, data->onSourceInfoRef, &callback);
+	
+	// call it: 
+  int argc = 2;
+  napi_value argv[2];
+  assert(napi_create_int32(data->env, eventID, &argv[0]) == napi_ok);
+  //assert(napi_create_string_utf8(data->env, info, &argv[1]) == napi_ok);
+  
+  //printf("CPP: second time>>> eventID: %d  |  source info: %p\n", eventID, info);
+
+  // pass this as an argument to the registered callback:
+	napi_value result;
+	assert(napi_call_function(data->env, sessionObject, callback, argc, argv, &result) == napi_ok);
 }
 
 void handleQuery(void* callbackReturn, apollo_handle_t session, uint16_t eventID, uint16_t eventStatusCode) {
@@ -609,24 +671,32 @@ napi_value open(napi_env env, napi_callback_info info) {
 
   // create a PersistentSessionData to hold our JS functions etc. in for this session:
   PersistentSessionData * data = new PersistentSessionData;
+  printf("CPP: open - our persistent data pointer is %p\n", data);
 
   // start a session with apollo
   data->sessionHandle = apolloOpenSession(0);
+  data->env = env;
 
   // argument args[0] should be a JS object with all the handlers in it
   // we'll need to store references to them in our PersistentSessionData to prevent garbage collection
   napi_value handler;
+  bool exists = false;
 
 
   // and also register the corresponding events with Apollo:
   registerHandshakePacketHandler(data->sessionHandle, data, handleHandshake);
   // TODO: check for existence before registering?
   napi_get_named_property(env, args[0], "onHandshake", &handler);
+  napi_has_named_property(env, args[0], "onHandshake", &exists);
+  printf("CPP: onHandshake exists? %d\n", exists);
   napi_create_reference(env, handler, 1, &data->onHandshakeRef);
 
+  //exists = false;
   registerSuccessHandler(data->sessionHandle, data, handleSuccess);
   // TODO: check for existence before registering?
   napi_get_named_property(env, args[0], "onSuccess", &handler);
+  napi_has_named_property(env, args[0], "onSuccess", &exists);
+  printf("CPP: onSuccess exists? %d\n", exists);
   napi_create_reference(env, handler, 1, &data->onSuccessRef);
 
   registerFailHandler(data->sessionHandle, data, handleFail);
@@ -634,9 +704,12 @@ napi_value open(napi_env env, napi_callback_info info) {
   napi_get_named_property(env, args[0], "onFail", &handler);
   napi_create_reference(env, handler, 1, &data->onFailRef);
 
+  //exists = false;
   registerDataStreamHandler(data->sessionHandle, data, handleDataStream);
   // TODO: check for existence before registering?
   napi_get_named_property(env, args[0], "onData", &handler);
+  napi_has_named_property(env, args[0], "onData", &exists);
+  printf("CPP: onData exists? %d\n", exists);
   napi_create_reference(env, handler, 1, &data->onDataRef);
 
   registerRawStreamHandler(data->sessionHandle, data, handleRawStream);
@@ -662,6 +735,8 @@ napi_value open(napi_env env, napi_callback_info info) {
   registerSourcesListHandler(data->sessionHandle, data, handleSourcesList);
   // TODO: check for existence before registering?
   napi_get_named_property(env, args[0], "onSourceList", &handler);
+  printf("CPP: onSourceLise exists? %d\n", exists);
+  napi_has_named_property(env, args[0], "onSourceList", &exists);
   napi_create_reference(env, handler, 1, &data->onSourceListRef);
 
   registerSourceInfoHandler(data->sessionHandle, data, handleSourceInfo);
