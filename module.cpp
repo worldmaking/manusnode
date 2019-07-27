@@ -10,7 +10,7 @@ struct PersistentSessionData {
   apollo_handle_t sessionHandle;
   napi_env env;
   napi_ref sessionRef;
-  napi_ref onHandshakeRef, onSuccessRef, onFailRef, onDataRef, onRawRef, onDongleListRef, onDeviceListRef, onDeviceInfoRef, onSourceListRef, onSourceInfoRef, onQueryRef;
+  napi_ref onHandshakeRef, onSuccessRef, onFailRef, onDataRef, onRawRef, onDongleListRef, onDeviceListRef, onDeviceInfoRef, onSourcesListRef, onSourceInfoRef, onQueryRef;
 };
 
 // the various generateXXX methods:
@@ -23,6 +23,7 @@ napi_value handshake(napi_env env, napi_callback_info args) {
   
   int32_t eventId = 0;
   napi_get_value_int32(env, argv[0], &eventId);
+  printf("CPP: napi handshake event %d\n", eventId);
   ApolloPacketBinary apb = generateHandshake(data->sessionHandle, eventId); 
   
   // incoming packet from Apollo:
@@ -32,9 +33,68 @@ napi_value handshake(napi_env env, napi_callback_info args) {
   napi_value ab;
   napi_create_arraybuffer(env, apb.bytes+4, &abdata, &ab);
   memcpy(((char *)abdata)+4, apb.payload, apb.bytes);
-  ((int32_t *)(abdata))[0] = apb.bytes;
+  ((uint32_t *)(abdata))[0] = apb.bytes;
 
-  printf("CPP: sending handshake event %d packet x%d %s\n", eventId, apb.bytes+4, apb.payload);
+  printf("CPP: napi sending handshake event %d packet x%d - %s\n", eventId, apb.bytes+4, apb.payload);
+
+  // cleanup
+  apolloDisposePacket(apb);
+  
+  return ab;
+}
+
+napi_value listSources(napi_env env, napi_callback_info args) {
+  size_t argc = 1; // how many args we want
+  napi_value argv[1];
+  PersistentSessionData * data; // the C++ data we can associate with a function
+  assert(napi_get_cb_info(env, args, &argc, argv, NULL, (void **)&data) == napi_ok);
+  
+  int32_t eventId = 0;
+  napi_get_value_int32(env, argv[0], &eventId);
+  printf("CPP: napi listSources event %d\n", eventId);
+  ApolloPacketBinary apb = generateListSources(data->sessionHandle, eventId); 
+
+  // incoming packet from Apollo:
+  // you need to consider that a 32-bit integer holding the incoming byte stream has been prepended by Apollo
+  // create arraybuffer around the apb
+  void * abdata;
+  napi_value ab;
+  napi_create_arraybuffer(env, apb.bytes+4, &abdata, &ab);
+  memcpy(((char *)abdata)+4, apb.payload, apb.bytes);
+  ((uint32_t *)(abdata))[0] = apb.bytes;
+
+  //printf("packet %d %s\n", apb.bytes+4, apb.payload);
+  printf("CPP: napi sending listsources event %d packet x%d - %s\n", eventId, apb.bytes+4, apb.payload);
+
+  // cleanup
+  apolloDisposePacket(apb);
+  
+  return ab;
+}
+
+napi_value getSourceInfo(napi_env env, napi_callback_info args) {
+  size_t argc = 2; // how many args we want
+  napi_value argv[2];
+  PersistentSessionData * data; // the C++ data we can associate with a function
+  assert(napi_get_cb_info(env, args, &argc, argv, NULL, (void **)&data) == napi_ok);
+  
+  int64_t source = 0;
+  int32_t eventId = 0;
+  napi_get_value_int64(env, argv[0], &source);
+  napi_get_value_int32(env, argv[1], &eventId);
+  ApolloPacketBinary apb = generateGetSourceInfo(data->sessionHandle, source, eventId); 
+
+  // incoming packet from Apollo:
+  // you need to consider that a 32-bit integer holding the incoming byte stream has been prepended by Apollo
+  // create arraybuffer around the apb
+  void * abdata;
+  napi_value ab;
+  napi_create_arraybuffer(env, apb.bytes+4, &abdata, &ab);
+  memcpy(((char *)abdata)+4, apb.payload, apb.bytes);
+  ((uint32_t *)(abdata))[0] = apb.bytes;
+  
+  //printf("packet %d %s\n", apb.bytes+4, apb.payload);
+  printf("CPP: napi sending getsourceinfo source %I64d and event %d packet x%d - %s\n", source, eventId, apb.bytes+4, apb.payload);
 
   // cleanup
   apolloDisposePacket(apb);
@@ -51,6 +111,7 @@ napi_value startStreams(napi_env env, napi_callback_info args) {
   int32_t eventId = 0;
   napi_get_value_int32(env, argv[0], &eventId);
   ApolloPacketBinary apb = generateStartStreams(data->sessionHandle, eventId); 
+
   // incoming packet from Apollo:
   // you need to consider that a 32-bit integer holding the incoming byte stream has been prepended by Apollo
   // create arraybuffer around the apb
@@ -58,10 +119,10 @@ napi_value startStreams(napi_env env, napi_callback_info args) {
   napi_value ab;
   napi_create_arraybuffer(env, apb.bytes+4, &abdata, &ab);
   memcpy(((char *)abdata)+4, apb.payload, apb.bytes);
-  ((int32_t *)(abdata))[0] = apb.bytes;
+  ((uint32_t *)(abdata))[0] = apb.bytes;
 
   //printf("packet %d %s\n", apb.bytes+4, apb.payload);
-  printf("CPP: sending startstreams event %d packet x%d %s\n", eventId, apb.bytes+4, apb.payload);
+  printf("CPP: napi sending startstreams event %d packet x%d - %s\n", eventId, apb.bytes+4, apb.payload);
 
   // cleanup
   apolloDisposePacket(apb);
@@ -78,6 +139,7 @@ napi_value stopStreams(napi_env env, napi_callback_info args) {
   int32_t eventId = 0;
   napi_get_value_int32(env, argv[0], &eventId);
   ApolloPacketBinary apb = generateStopStreams(data->sessionHandle, eventId); 
+
   // incoming packet from Apollo:
   // you need to consider that a 32-bit integer holding the incoming byte stream has been prepended by Apollo
   // create arraybuffer around the apb
@@ -85,10 +147,10 @@ napi_value stopStreams(napi_env env, napi_callback_info args) {
   napi_value ab;
   napi_create_arraybuffer(env, apb.bytes+4, &abdata, &ab);
   memcpy(((char *)abdata)+4, apb.payload, apb.bytes);
-  ((int32_t *)(abdata))[0] = apb.bytes;
+  ((uint32_t *)(abdata))[0] = apb.bytes;
 
   //printf("packet %d %s\n", apb.bytes+4, apb.payload);
-  printf("CPP: sending stopstreams event %d packet x%d %s\n", eventId, apb.bytes+4, apb.payload);
+  printf("CPP: napi sending stopstreams event %d packet x%d - %s\n", eventId, apb.bytes+4, apb.payload);
 
   // cleanup
   apolloDisposePacket(apb);
@@ -96,66 +158,6 @@ napi_value stopStreams(napi_env env, napi_callback_info args) {
   return ab;
 }
 
-napi_value listSources(napi_env env, napi_callback_info args) {
-  size_t argc = 1; // how many args we want
-  napi_value argv[1];
-  PersistentSessionData * data; // the C++ data we can associate with a function
-  assert(napi_get_cb_info(env, args, &argc, argv, NULL, (void **)&data) == napi_ok);
-  
-  int32_t eventId = 0;
-  napi_get_value_int32(env, argv[0], &eventId);
-  ApolloPacketBinary apb = generateListSources(data->sessionHandle, eventId); 
-  // incoming packet from Apollo:
-  // you need to consider that a 32-bit integer holding the incoming byte stream has been prepended by Apollo
-  // create arraybuffer around the apb
-  void * abdata;
-  napi_value ab;
-  napi_create_arraybuffer(env, apb.bytes+4, &abdata, &ab);
-  memcpy(((char *)abdata)+4, apb.payload, apb.bytes);
-  ((int32_t *)(abdata))[0] = apb.bytes;
-
-  //printf("packet %d %s\n", apb.bytes+4, apb.payload);
-  printf("CPP: sending listsources event %d packet x%d %s\n", eventId, apb.bytes+4, apb.payload);
-
-  // cleanup
-  apolloDisposePacket(apb);
-  
-  return ab;
-}
-
-// generateGetSourceInfo(sessionHandle, source, eventId) 
-napi_value getSourceInfo(napi_env env, napi_callback_info args) {
-  size_t argc = 2; // how many args we want
-  napi_value argv[2];
-  PersistentSessionData * data; // the C++ data we can associate with a function
-  assert(napi_get_cb_info(env, args, &argc, argv, NULL, (void **)&data) == napi_ok);
-  
-  int64_t source = 0;
-  int32_t eventId = 0;
-  napi_get_value_int64(env, argv[0], &source);
-  napi_get_value_int32(env, argv[1], &eventId);
-  ApolloPacketBinary apb = generateGetSourceInfo(data->sessionHandle, source, eventId); 
-
-  // incoming packet from Apollo:
-  // you need to consider that a 32-bit integer holding the incoming byte stream has been prepended by Apollo
-  // create arraybuffer around the apb
-  
-  void * abdata;
-  napi_value ab;
-  napi_create_arraybuffer(env, apb.bytes+4, &abdata, &ab);
-  memcpy(((char *)abdata)+4, apb.payload, apb.bytes);
-  ((int32_t *)(abdata))[0] = apb.bytes;
-  
-  //printf("packet %d %s\n", apb.bytes+4, apb.payload);
-  printf("CPP: sending getsourceinfo source %I64d and event %d packet x%d %s\n", source, eventId, apb.bytes+4, apb.payload);
-
-  // cleanup
-  apolloDisposePacket(apb);
-  
-  return ab;
-}
-
-// generateListDongleID(sessionHandle, eventId)
 napi_value listDongleID(napi_env env, napi_callback_info args) {
   size_t argc = 1; // how many args we want
   napi_value argv[1];
@@ -165,6 +167,7 @@ napi_value listDongleID(napi_env env, napi_callback_info args) {
   int32_t eventId = 0;
   napi_get_value_int32(env, argv[0], &eventId);
   ApolloPacketBinary apb = generateListDongleIDs(data->sessionHandle, eventId); 
+
   // incoming packet from Apollo:
   // you need to consider that a 32-bit integer holding the incoming byte stream has been prepended by Apollo
   // create arraybuffer around the apb
@@ -175,7 +178,7 @@ napi_value listDongleID(napi_env env, napi_callback_info args) {
   ((int32_t *)(abdata))[0] = apb.bytes;
 
   //printf("packet %d %s\n", apb.bytes+4, apb.payload);
-  printf("CPP: sending listdongles event %d packet x%d %s\n", eventId, apb.bytes+4, apb.payload);
+  printf("CPP: napi sending listdongles event %d packet x%d - %s\n", eventId, apb.bytes+4, apb.payload);
 
   // cleanup
   apolloDisposePacket(apb);
@@ -183,7 +186,6 @@ napi_value listDongleID(napi_env env, napi_callback_info args) {
   return ab;
 }
 
-// generateListDeviceID(sessionHandle, dongleID, eventId)
 napi_value listDeviceID(napi_env env, napi_callback_info args) {
   size_t argc = 2; // how many args we want
   napi_value argv[2];
@@ -195,6 +197,7 @@ napi_value listDeviceID(napi_env env, napi_callback_info args) {
   napi_get_value_int64(env, argv[0], &dongleID);
   napi_get_value_int32(env, argv[1], &eventId);
   ApolloPacketBinary apb = generateListDeviceIDs(data->sessionHandle, dongleID, eventId); 
+
   // incoming packet from Apollo:
   // you need to consider that a 32-bit integer holding the incoming byte stream has been prepended by Apollo
   // create arraybuffer around the apb
@@ -205,7 +208,7 @@ napi_value listDeviceID(napi_env env, napi_callback_info args) {
   ((int32_t *)(abdata))[0] = apb.bytes;
 
   //printf("packet %d %s\n", apb.bytes+4, apb.payload);
-  printf("CPP: sending listdevices dongle %I64d event %d packet x%d %s\n", dongleID, eventId, apb.bytes+4, apb.payload);
+  printf("CPP: napi sending listdevices dongle %I64d event %d packet x%d - %s\n", dongleID, eventId, apb.bytes+4, apb.payload);
 
   // cleanup
   apolloDisposePacket(apb);
@@ -213,7 +216,6 @@ napi_value listDeviceID(napi_env env, napi_callback_info args) {
   return ab;
 }
 
-// generateGetDeviceInfo(sessionHandle, deviceID, eventId)
 napi_value getDeviceInfo(napi_env env, napi_callback_info args) {
   size_t argc = 2; // how many args we want
   napi_value argv[2];
@@ -229,7 +231,6 @@ napi_value getDeviceInfo(napi_env env, napi_callback_info args) {
   // incoming packet from Apollo:
   // you need to consider that a 32-bit integer holding the incoming byte stream has been prepended by Apollo
   // create arraybuffer around the apb
-  
   void * abdata;
   napi_value ab;
   napi_create_arraybuffer(env, apb.bytes+4, &abdata, &ab);
@@ -237,7 +238,7 @@ napi_value getDeviceInfo(napi_env env, napi_callback_info args) {
   ((int32_t *)(abdata))[0] = apb.bytes;
   
   //printf("packet %d %s\n", apb.bytes+4, apb.payload);
-  printf("CPP: sending getdeviceinfo device %I64d and event %d packet x%d %s\n", deviceID, eventId, apb.bytes+4, apb.payload);
+  printf("CPP: napi sending getdeviceinfo device %I64d and event %d packet x%d - %s\n", deviceID, eventId, apb.bytes+4, apb.payload);
 
   // cleanup
   apolloDisposePacket(apb);
@@ -256,11 +257,10 @@ napi_value addStreams(napi_env env, napi_callback_info args) {
   int64_t const sources = 0; // list of source endpoint IDs from listSources 
   int32_t numSources = 0;
   int32_t eventId = 0;
-
+  // napi_get_value_bigint_words(env, argv[0], NULL, &numSources, NULL);
+  // napi_get_value_bigint_uint64(env, argv[0], &sources);
+  // napi_get_value_int64(env, argv[0], &sources);
   napi_get_value_int32(env, argv[1], &numSources);
-
-  // TODO: use numSources to extract sourceIDs from the sources list?? 
-
   napi_get_value_int32(env, argv[2], &eventId);
   ApolloPacketBinary apb = generateAddStreams(data->sessionHandle, sources, numSources, eventId);
 
@@ -274,7 +274,7 @@ napi_value addStreams(napi_env env, napi_callback_info args) {
   ((int32_t *)(abdata))[0] = apb.bytes;
 
   //printf("packet %d %s\n", apb.bytes+4, apb.payload);
-  printf("CPP: sending addstreams numsources %d event %d packet x%d %s\n", numSources, eventId, apb.bytes+4, apb.payload);
+  printf("CPP: napi sending addstreams numsources %d event %d packet x%d %s\n", numSources, eventId, apb.bytes+4, apb.payload);
 
   // cleanup
   apolloDisposePacket(apb);
@@ -292,11 +292,8 @@ napi_value removeStreams(napi_env env, napi_callback_info args) {
   int64_t const sources = 0; // list of source endpoint IDs from listSources 
   int32_t numSources = 0;
   int32_t eventId = 0;
-
   napi_get_value_int32(env, argv[1], &numSources);
-
   // TODO: use numSources to extract sourceIDs from the sources list?? 
-
   napi_get_value_int32(env, argv[2], &eventId);
   ApolloPacketBinary apb = generateRemoveStreams(data->sessionHandle, sources, numSources, eventId);
 
@@ -310,7 +307,7 @@ napi_value removeStreams(napi_env env, napi_callback_info args) {
   ((int32_t *)(abdata))[0] = apb.bytes;
 
   //printf("packet %d %s\n", apb.bytes+4, apb.payload);
-  printf("CPP: sending removestreams numsources %d event %d packet x%d %s\n", numSources, eventId, apb.bytes+4, apb.payload);
+  printf("CPP: napi sending removestreams numsources %d event %d packet x%d %s\n", numSources, eventId, apb.bytes+4, apb.payload);
 
   // cleanup
   apolloDisposePacket(apb);
@@ -318,7 +315,7 @@ napi_value removeStreams(napi_env env, napi_callback_info args) {
   return ab;
 }
 
-// generateSetStreamData(sessionHandle, source, dataEnabled, eventId); // dataEnabled true - if we want to access stream data (other option is generateSetRawData)
+// dataEnabled true - if we want to access stream data (other option is generateSetStreamRaw)
 napi_value setStreamData(napi_env env, napi_callback_info args) {
   size_t argc = 3; // how many args we want
   napi_value argv[3];
@@ -342,7 +339,7 @@ napi_value setStreamData(napi_env env, napi_callback_info args) {
   ((int32_t *)(abdata))[0] = apb.bytes;
 
   //printf("packet %d %s\n", apb.bytes+4, apb.payload);
-  printf("CPP: sending setstreamdata source %I64d data Y/N %d event %d packet x%d %s\n", source, dataEnabled, eventId, apb.bytes+4, apb.payload);
+  printf("CPP: napi sending setstreamdata source %I64d data Y/N %d event %d packet x%d %s\n", source, dataEnabled, eventId, apb.bytes+4, apb.payload);
 
   // cleanup
   apolloDisposePacket(apb);
@@ -350,7 +347,7 @@ napi_value setStreamData(napi_env env, napi_callback_info args) {
   return ab;  
 }
 
-// generateSetStreamRaw(sessionHandle, source, rawEnabled, eventId); // rawEnabled true - if we want to access raw data (other option is generateSetStreamData)
+// rawEnabled true - if we want to access raw data (other option is generateSetStreamData)
 napi_value setStreamRaw(napi_env env, napi_callback_info args) {
   size_t argc = 3; // how many args we want
   napi_value argv[3];
@@ -374,7 +371,7 @@ napi_value setStreamRaw(napi_env env, napi_callback_info args) {
   ((int32_t *)(abdata))[0] = apb.bytes;
 
   //printf("packet %d %s\n", apb.bytes+4, apb.payload);
-  printf("CPP: sending setstreamdata source %I64d data Y/N %d event %d packet x%d %s\n", source, rawEnabled, eventId, apb.bytes+4, apb.payload);
+  printf("CPP: napi sending setstreamdata source %I64d data Y/N %d event %d packet x%d %s\n", source, rawEnabled, eventId, apb.bytes+4, apb.payload);
 
   // cleanup
   apolloDisposePacket(apb);
@@ -401,7 +398,7 @@ napi_value queryEvent(napi_env env, napi_callback_info args) {
   memcpy(((char *)abdata)+4, apb.payload, apb.bytes);
   ((int32_t *)(abdata))[0] = apb.bytes;
 
-  printf("CPP: sending query event %d packet x%d %s\n", eventId, apb.bytes+4, apb.payload);
+  printf("CPP: napi sending query event %d packet x%d %s\n", eventId, apb.bytes+4, apb.payload);
 
   // cleanup
   apolloDisposePacket(apb);
@@ -424,7 +421,7 @@ napi_value process(napi_env env, napi_callback_info args) {
   uint32_t * abdata;
   size_t nbytes;
   status = napi_get_arraybuffer_info(env, argv[0], (void **)&abdata, &nbytes);
-  printf("CPP: process found data %lld %i\n", nbytes, abdata[0]);
+  printf("CPP: napi process found data %lld %i\n", nbytes, abdata[0]);
 
   // outgoing packet to Apollo:
   // you need to make sure to prepend a 32-bit integer holding the outgoing byte stream length to the byte stream before committing it to Apollo through the TCP socket
@@ -433,18 +430,21 @@ napi_value process(napi_env env, napi_callback_info args) {
   apb.payload = ((char *)(abdata))+4;
   apolloProcessPacket(data->sessionHandle, &apb);
 
+  // cleanup? (crashes, so commented it out)
+  //apolloDisposePacket(apb);
+
+  printf("CPP: napi process complete\n");
 
   // cleanup? (crashes, so commented it out)
   //apolloDisposePacket(apb);
 
-  printf("CPP: process complete\n");
   return nullptr;
 }
 
 // end a session
 // session.close()
 napi_value close(napi_env env, napi_callback_info args) {
-  printf("CPP: close session");
+  printf("CPP: napi close session");
   size_t argc = 0; // how many args we want
   PersistentSessionData * data; // the C++ data we can associate with a function
   assert(napi_get_cb_info(env, args, &argc, nullptr, nullptr, (void **)&data) == napi_ok);
@@ -460,7 +460,7 @@ void handleHandshake(void* callbackReturn, apollo_handle_t session, const Apollo
   PersistentSessionData * data = (PersistentSessionData *)callbackReturn;
 
   printf("CPP: handleHandshake with packet %p\n", packetToReturn);
-  printf("CPP: data pointer is %p; env %p, object %p callback %p\n", data, data->env, data->sessionRef, data->onHandshakeRef);
+  printf("CPP: handleHandshake data pointer is %p; env %p, object %p callback %p\n", data, data->env, data->sessionRef, data->onHandshakeRef);
 
   // pull the session object back out of the napi_ref:
 	napi_value sessionObject; 
@@ -470,7 +470,7 @@ void handleHandshake(void* callbackReturn, apollo_handle_t session, const Apollo
   napi_typeof(data->env, sessionObject, &resultType);
   assert(resultType == napi_object);
 
-  printf("CPP: handleHandshake with object %p\n", sessionObject);
+  // printf("CPP: handleHandshake with object %p\n", sessionObject);
 
   // pull the callback function back out of the napi_ref:
 	napi_value callback; 
@@ -478,7 +478,7 @@ void handleHandshake(void* callbackReturn, apollo_handle_t session, const Apollo
   napi_typeof(data->env, callback, &resultType);
   assert(resultType == napi_function);
 	
-  printf("CPP: handleHandshake with callback %p\n", callback);
+  // printf("CPP: handleHandshake with callback %p\n", callback);
 
 	// call it: 
   int argc = 1;
@@ -504,13 +504,13 @@ void handleSuccess(void* callbackReturn, apollo_handle_t session, uint16_t event
 
   // pull the session object back out of the napi_ref:
 	napi_value sessionObject; 
-	napi_get_reference_value(data->env, data->sessionRef, &sessionObject);
+	assert(napi_ok == napi_get_reference_value(data->env, data->sessionRef, &sessionObject));
 
   napi_valuetype resultType;
   napi_typeof(data->env, sessionObject, &resultType);
   assert(resultType == napi_object);
 
-  printf("CPP: handleSuccess with object %p\n", sessionObject);
+  // printf("CPP: handleSuccess with object %p\n", sessionObject);
 
   // pull the callback function back out of the napi_ref:
 	napi_value callback; 
@@ -518,11 +518,12 @@ void handleSuccess(void* callbackReturn, apollo_handle_t session, uint16_t event
   napi_typeof(data->env, callback, &resultType);
   assert(resultType == napi_function);
 
-  printf("CPP: handleSuccess with callback %p\n", callback);
+  // printf("CPP: handleSuccess with callback %p\n", callback);
 	
 	// call it: 
   int argc = 2;
   napi_value argv[2];
+
   assert(napi_create_int32(data->env, eventID, &argv[0]) == napi_ok);
   assert(napi_create_string_utf8(data->env, successMsg, strlen(successMsg), &argv[1]) == napi_ok);
 
@@ -541,13 +542,13 @@ void handleFail(void* callbackReturn, apollo_handle_t session, uint16_t eventID,
 
   // pull the session object back out of the napi_ref:
 	napi_value sessionObject; 
-	napi_get_reference_value(data->env, data->sessionRef, &sessionObject);
+	assert(napi_ok == napi_get_reference_value(data->env, data->sessionRef, &sessionObject));
 
   napi_valuetype resultType;
   napi_typeof(data->env, sessionObject, &resultType);
   assert(resultType == napi_object);
 
-  printf("CPP: handleFail with object %p\n", sessionObject);
+  // printf("CPP: handleFail with object %p\n", sessionObject);
 
   // pull the callback function back out of the napi_ref:
 	napi_value callback; 
@@ -555,7 +556,7 @@ void handleFail(void* callbackReturn, apollo_handle_t session, uint16_t eventID,
   napi_typeof(data->env, callback, &resultType);
   assert(resultType == napi_function);
 
-  printf("CPP: handleFail with callback %p\n", callback);
+  // printf("CPP: handleFail with callback %p\n", callback);
 	
 	// call it: 
   int argc = 2;
@@ -571,6 +572,78 @@ void handleFail(void* callbackReturn, apollo_handle_t session, uint16_t eventID,
 
 }
 
+void handleSourcesList(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const U64Array * const sourceList) {
+  PersistentSessionData * data = (PersistentSessionData *)callbackReturn;
+
+  // generate list of sources connected to Apollo, i.e., L and R glove
+  printf("CPP: eventID: %d  |  sources: %p\n", eventID, sourceList);
+
+  // pull the session object back out of the napi_ref:
+	napi_value sessionObject; 
+	assert(napi_ok == napi_get_reference_value(data->env, data->sessionRef, &sessionObject));
+
+  napi_valuetype resultType;
+  napi_typeof(data->env, sessionObject, &resultType);
+  assert(resultType == napi_object);
+
+  // printf("CPP: handleSourcesList with object %p\n", sessionObject);
+
+  // pull the callback function back out of the napi_ref:
+	napi_value callback; 
+	napi_get_reference_value(data->env, data->onSourcesListRef, &callback);
+	
+    // printf("CPP: handleSourcesList with callback %p\n", callback);
+
+	// call it: 
+  int argc = 2;
+  napi_value argv[2];
+  assert(napi_create_int32(data->env, eventID == 2, &argv[0]) == napi_ok);
+  assert(napi_create_array_with_length(data->env, sizeof(sourceList), &argv[1]) == napi_ok);
+  
+  // pass this as an argument to the registered callback:
+	napi_value result;
+	assert(napi_call_function(data->env, sessionObject, callback, argc, argv, &result) == napi_ok);
+
+  printf("CPP: handleSourcesList complete\n");
+
+}
+
+void handleSourceInfo(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const ApolloSourceInfo * const info) {
+  PersistentSessionData * data = (PersistentSessionData *)callbackReturn;
+
+  // want L/R side from ApolloSoureInfo struct -> apollo_laterality_t
+  printf("CPP: eventID: %d  |  source info: %p\n", eventID, info);
+
+  // pull the session object back out of the napi_ref:
+	napi_value sessionObject; 
+	assert(napi_ok == napi_get_reference_value(data->env, data->sessionRef, &sessionObject));
+
+  napi_valuetype resultType;
+  napi_typeof(data->env, sessionObject, &resultType);
+  assert(resultType == napi_object);
+
+  // printf("CPP: handleSourceInfo with object %p\n", sessionObject);
+
+  // pull the callback function back out of the napi_ref:
+	napi_value callback; 
+	napi_get_reference_value(data->env, data->onSourceInfoRef, &callback);
+	
+  // printf("CPP: handleSourceInfo with callback %p\n", callback);
+
+	// call it: 
+  int argc = 2;
+  napi_value argv[2];
+  assert(napi_create_int32(data->env, eventID, &argv[0]) == napi_ok);
+  assert(napi_create_array_with_length(data->env, sizeof(info), &argv[1]) == napi_ok);
+  
+  // pass this as an argument to the registered callback:
+	napi_value result;
+	assert(napi_call_function(data->env, sessionObject, callback, argc, argv, &result) == napi_ok);
+ 
+  printf("CPP: handleSourceInfo complete\n");
+
+}
+
 void handleDataStream(void* callbackReturn, apollo_handle_t session, const ApolloJointData * const jointData) {
   PersistentSessionData * data = (PersistentSessionData *)callbackReturn;
 
@@ -578,13 +651,13 @@ void handleDataStream(void* callbackReturn, apollo_handle_t session, const Apoll
 
   // pull the session object back out of the napi_ref:
 	napi_value sessionObject; 
-	napi_get_reference_value(data->env, data->sessionRef, &sessionObject);
+	assert(napi_ok == napi_get_reference_value(data->env, data->sessionRef, &sessionObject));
 
   napi_valuetype resultType;
   napi_typeof(data->env, sessionObject, &resultType);
   assert(resultType == napi_object);
 
-  printf("CPP: handleDataStream with object %p\n", sessionObject);
+  // printf("CPP: handleDataStream with object %p\n", sessionObject);
 
   // pull the callback function back out of the napi_ref:
 	napi_value callback; 
@@ -592,7 +665,7 @@ void handleDataStream(void* callbackReturn, apollo_handle_t session, const Apoll
   napi_typeof(data->env, callback, &resultType);
   assert(resultType == napi_function);
 
-  printf("CPP: handleDataStream with callback %p\n", callback);
+  // printf("CPP: handleDataStream with callback %p\n", callback);
 	
 	// call it: 
   int argc = 1;
@@ -610,17 +683,17 @@ void handleDataStream(void* callbackReturn, apollo_handle_t session, const Apoll
 void handleRawStream(void* callbackReturn, apollo_handle_t session, const ApolloRawData * const rawData) {
   PersistentSessionData * data = (PersistentSessionData *)callbackReturn;
 
-  printf("CPP: handleRawStream with jointData %p\n", rawData);
+  printf("CPP: handleRawStream with rawData %p\n", rawData);
 
   // pull the session object back out of the napi_ref:
 	napi_value sessionObject; 
-	napi_get_reference_value(data->env, data->sessionRef, &sessionObject);
+	assert(napi_ok == napi_get_reference_value(data->env, data->sessionRef, &sessionObject));
 
   napi_valuetype resultType;
   napi_typeof(data->env, sessionObject, &resultType);
   assert(resultType == napi_object);
 
-  printf("CPP: handleRawStream with object %p\n", sessionObject);
+  // printf("CPP: handleRawStream with object %p\n", sessionObject);
 
   // pull the callback function back out of the napi_ref:
 	napi_value callback; 
@@ -628,7 +701,7 @@ void handleRawStream(void* callbackReturn, apollo_handle_t session, const Apollo
   napi_typeof(data->env, callback, &resultType);
   assert(resultType == napi_function);
 
-  printf("CPP: handleRawStream with callback %p\n", callback);
+  // printf("CPP: handleRawStream with callback %p\n", callback);
 	
 	// call it: 
   int argc = 1;
@@ -648,21 +721,21 @@ void handleDongleList(void* callbackReturn, apollo_handle_t session, uint16_t ev
 
   printf("CPP: eventID: %d  |  dongles: %p\n", eventID, dongleList);
 
-  // pull the session object back out of the napi_ref:
+   // pull the session object back out of the napi_ref:
 	napi_value sessionObject; 
-	napi_get_reference_value(data->env, data->sessionRef, &sessionObject);
-  
+	assert(napi_ok == napi_get_reference_value(data->env, data->sessionRef, &sessionObject));
+
   napi_valuetype resultType;
   napi_typeof(data->env, sessionObject, &resultType);
   assert(resultType == napi_object);
 
-  printf("CPP: handleDongleList with object %p\n", sessionObject);
+  // printf("CPP: handleDongleList with object %p\n", sessionObject);
 
   // pull the callback function back out of the napi_ref:
 	napi_value callback; 
 	napi_get_reference_value(data->env, data->onDongleListRef, &callback);
 	
-	printf("CPP: handleDongleList with callback %p\n", callback);
+	// printf("CPP: handleDongleList with callback %p\n", callback);
 
   // call it: 
   int argc = 2;
@@ -685,19 +758,19 @@ void handleDeviceIdList(void* callbackReturn, apollo_handle_t session, uint16_t 
 
   // pull the session object back out of the napi_ref:
 	napi_value sessionObject; 
-	napi_get_reference_value(data->env, data->sessionRef, &sessionObject);
-  
+	assert(napi_ok == napi_get_reference_value(data->env, data->sessionRef, &sessionObject));
+
   napi_valuetype resultType;
   napi_typeof(data->env, sessionObject, &resultType);
   assert(resultType == napi_object);
 
-  printf("CPP: handleFail with object %p\n", sessionObject);
+  // printf("CPP: handleFail with object %p\n", sessionObject);
 
   // pull the callback function back out of the napi_ref:
 	napi_value callback; 
 	napi_get_reference_value(data->env, data->onDeviceListRef, &callback);
 	
-  printf("CPP: handleFail with callback %p\n", callback);
+  // printf("CPP: handleFail with callback %p\n", callback);
 
 	// call it: 
   int argc = 2;
@@ -720,19 +793,19 @@ void handleDeviceInfo(void* callbackReturn, apollo_handle_t session, uint16_t ev
 
   // pull the session object back out of the napi_ref:
 	napi_value sessionObject; 
-	napi_get_reference_value(data->env, data->sessionRef, &sessionObject);
-  
+	assert(napi_ok == napi_get_reference_value(data->env, data->sessionRef, &sessionObject));
+
   napi_valuetype resultType;
   napi_typeof(data->env, sessionObject, &resultType);
   assert(resultType == napi_object);
 
-  printf("CPP: handleDeviceInfo with object %p\n", sessionObject);
+  // printf("CPP: handleDeviceInfo with object %p\n", sessionObject);
 
   // pull the callback function back out of the napi_ref:
 	napi_value callback; 
 	napi_get_reference_value(data->env, data->onDeviceInfoRef, &callback);
 	
-  printf("CPP: handleDeviceInfo with callback %p\n", callback);
+  // printf("CPP: handleDeviceInfo with callback %p\n", callback);
 
 	// call it: 
   int argc = 2;
@@ -748,73 +821,7 @@ void handleDeviceInfo(void* callbackReturn, apollo_handle_t session, uint16_t ev
   
 }
 
-void handleSourcesList(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const U64Array * const sourceList) {
-  PersistentSessionData * data = (PersistentSessionData *)callbackReturn;
 
-  // pull the session object back out of the napi_ref:
-	napi_value sessionObject; 
-	napi_get_reference_value(data->env, data->sessionRef, &sessionObject);
-  
-  napi_valuetype resultType;
-  napi_typeof(data->env, sessionObject, &resultType);
-  assert(resultType == napi_object);
-
-  // generate list of sources connected to Apollo, i.e., L and R glove
-  printf("CPP: eventID: %d  |  sources: %p\n", eventID, sourceList);
-
-  // pull the callback function back out of the napi_ref:
-	napi_value callback; 
-	napi_get_reference_value(data->env, data->onSourceListRef, &callback);
-	
-	// call it: 
-  int argc = 2;
-  napi_value argv[2];
-  assert(napi_create_int32(data->env, eventID, &argv[0]) == napi_ok);
-  assert(napi_create_array_with_length(data->env, sizeof(sourceList), &argv[1]) == napi_ok);
-  
-  // pass this as an argument to the registered callback:
-	napi_value result;
-	assert(napi_call_function(data->env, sessionObject, callback, argc, argv, &result) == napi_ok);
-
-  printf("CPP: handleSourcesList complete\n");
-
-}
-
-void handleSourceInfo(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const ApolloSourceInfo * const info) {
-  PersistentSessionData * data = (PersistentSessionData *)callbackReturn;
-
-  // want L/R side from ApolloSoureInfo struct -> apollo_laterality_t
-  printf("CPP: eventID: %d  |  source info: %p\n", eventID, info);
-
-  // pull the session object back out of the napi_ref:
-	napi_value sessionObject; 
-	napi_get_reference_value(data->env, data->sessionRef, &sessionObject);
-  
-  napi_valuetype resultType;
-  napi_typeof(data->env, sessionObject, &resultType);
-  assert(resultType == napi_object);
-
-  printf("CPP: handleSourceInfo with object %p\n", sessionObject);
-
-  // pull the callback function back out of the napi_ref:
-	napi_value callback; 
-	napi_get_reference_value(data->env, data->onSourceInfoRef, &callback);
-	
-  printf("CPP: handleSourceInfo with callback %p\n", callback);
-
-	// call it: 
-  int argc = 2;
-  napi_value argv[2];
-  assert(napi_create_int32(data->env, eventID, &argv[0]) == napi_ok);
-  assert(napi_create_array_with_length(data->env, sizeof(info), &argv[1]) == napi_ok);
-  
-  // pass this as an argument to the registered callback:
-	napi_value result;
-	assert(napi_call_function(data->env, sessionObject, callback, argc, argv, &result) == napi_ok);
- 
-  printf("CPP: handleSourceInfo complete\n");
-
-}
 
 void handleQuery(void* callbackReturn, apollo_handle_t session, uint16_t eventID, uint16_t eventStatusCode) {
   PersistentSessionData * data = (PersistentSessionData *)callbackReturn;
@@ -823,19 +830,19 @@ void handleQuery(void* callbackReturn, apollo_handle_t session, uint16_t eventID
 
   // pull the session object back out of the napi_ref:
 	napi_value sessionObject; 
-	napi_get_reference_value(data->env, data->sessionRef, &sessionObject);
-  
+	assert(napi_ok == napi_get_reference_value(data->env, data->sessionRef, &sessionObject));
+
   napi_valuetype resultType;
   napi_typeof(data->env, sessionObject, &resultType);
   assert(resultType == napi_object);
 
-  printf("CPP: handleQuery with object %p\n", sessionObject);
+  // printf("CPP: handleQuery with object %p\n", sessionObject);
 
   // pull the callback function back out of the napi_ref:
   napi_value callback;
   napi_get_reference_value(data->env, data->onQueryRef, &callback);
 
-  printf("CPP: handleQuery with callback %p\n", callback);
+  // printf("CPP: handleQuery with callback %p\n", callback);
 
   // call it:
   int argc = 2;
@@ -861,7 +868,7 @@ napi_value open(napi_env env, napi_callback_info info) {
 
   // create a PersistentSessionData to hold our JS functions etc. in for this session:
   PersistentSessionData * data = new PersistentSessionData;
-  printf("CPP: open - our persistent data pointer is %p\n", data);
+  printf("CPP: napi open our persistent data pointer is %p\n", data);
 
   // start a session with apollo
   data->sessionHandle = apolloOpenSession(0);
@@ -872,7 +879,6 @@ napi_value open(napi_env env, napi_callback_info info) {
   napi_value handler;
   bool exists = false;
 
-
   // and also register the corresponding events with Apollo:
   registerHandshakePacketHandler(data->sessionHandle, data, handleHandshake);
   // TODO: check for existence before registering?
@@ -881,7 +887,7 @@ napi_value open(napi_env env, napi_callback_info info) {
   printf("CPP: onHandshake exists? %d\n", exists);
   if (exists) napi_create_reference(env, handler, 1, &data->onHandshakeRef);
 
-  //exists = false;
+  exists = false;
   registerSuccessHandler(data->sessionHandle, data, handleSuccess);
   // TODO: check for existence before registering?
   napi_get_named_property(env, args[0], "onSuccess", &handler);
@@ -889,12 +895,15 @@ napi_value open(napi_env env, napi_callback_info info) {
   printf("CPP: onSuccess exists? %d\n", exists);
   if (exists) napi_create_reference(env, handler, 1, &data->onSuccessRef);
 
+  exists = false;
   registerFailHandler(data->sessionHandle, data, handleFail);
   // TODO: check for existence before registering?
   napi_get_named_property(env, args[0], "onFail", &handler);
+  napi_has_named_property(env, args[0], "onFail", &exists);
+  printf("CPP: onFail exists? %d\n", exists);  
   if (exists) napi_create_reference(env, handler, 1, &data->onFailRef);
 
-  //exists = false;
+  exists = false;
   registerDataStreamHandler(data->sessionHandle, data, handleDataStream);
   // TODO: check for existence before registering?
   napi_get_named_property(env, args[0], "onData", &handler);
@@ -902,41 +911,60 @@ napi_value open(napi_env env, napi_callback_info info) {
   printf("CPP: onData exists? %d\n", exists);
   if (exists) napi_create_reference(env, handler, 1, &data->onDataRef);
 
+  exists = false;
   registerRawStreamHandler(data->sessionHandle, data, handleRawStream);
   // TODO: check for existence before registering?
   napi_get_named_property(env, args[0], "onRaw", &handler);
+  napi_has_named_property(env, args[0], "onRaw", &exists);
+  printf("CPP: onRaw exists? %d\n", exists);
   if (exists) napi_create_reference(env, handler, 1, &data->onRawRef);
 
+  exists = false;
   registerDongleIdListHandler(data->sessionHandle, data, handleDongleList);
   // TODO: check for existence before registering?
   napi_get_named_property(env, args[0], "onDongleList", &handler);
+  napi_has_named_property(env, args[0], "onDongleList", &exists);
+  printf("CPP: onDongleList exists? %d\n", exists);
   if (exists) napi_create_reference(env, handler, 1, &data->onDongleListRef);
 
+  exists = false;
   registerDeviceIdListHandler(data->sessionHandle, data, handleDeviceIdList);
   // TODO: check for existence before registering?
   napi_get_named_property(env, args[0], "onDeviceList", &handler);
+  napi_has_named_property(env, args[0], "onDeviceList", &exists);
+  printf("CPP: onDeviceList exists? %d\n", exists);
   if (exists) napi_create_reference(env, handler, 1, &data->onDeviceListRef);
 
+  exists = false;
   registerDeviceInfoHandler(data->sessionHandle, data, handleDeviceInfo);
   // TODO: check for existence before registering?
   napi_get_named_property(env, args[0], "onDeviceInfo", &handler);
+  napi_has_named_property(env, args[0], "onDeviceInfo", &exists);
+  printf("CPP: onDeviceInfo exists? %d\n", exists);
   if (exists) napi_create_reference(env, handler, 1, &data->onDeviceInfoRef);
 
+  exists = false;
   registerSourcesListHandler(data->sessionHandle, data, handleSourcesList);
   // TODO: check for existence before registering?
-  napi_get_named_property(env, args[0], "onSourceList", &handler);
-  printf("CPP: onSourceLise exists? %d\n", exists);
-  napi_has_named_property(env, args[0], "onSourceList", &exists);
-  if (exists) napi_create_reference(env, handler, 1, &data->onSourceListRef);
+  napi_get_named_property(env, args[0], "onSourcesList", &handler);
+  napi_has_named_property(env, args[0], "onSourcesList", &exists);
+  printf("CPP: onSourcesList exists? %d\n", exists);
+  if (exists) napi_create_reference(env, handler, 1, &data->onSourcesListRef);
 
+  exists = false;
   registerSourceInfoHandler(data->sessionHandle, data, handleSourceInfo);
   // TODO: check for existence before registering?
   napi_get_named_property(env, args[0], "onSourceInfo", &handler);
+  napi_has_named_property(env, args[0], "onSourceInfo", &exists);
+  printf("CPP: onSourceInfo exists? %d\n", exists);
   if (exists) napi_create_reference(env, handler, 1, &data->onSourceInfoRef);
 
+  exists = false;
   registerQueryHandler(data->sessionHandle, data, handleQuery);
   // TODO: check for existence before registering?
   napi_get_named_property(env, args[0], "onQuery", &handler);
+  napi_has_named_property(env, args[0], "onQuery", &exists);
+  printf("CPP: onQuery exists? %d\n", exists);
   if (exists) napi_create_reference(env, handler, 1, &data->onQueryRef);
 
   // we will return a persistent object to talk to the session:
@@ -995,7 +1023,7 @@ napi_value open(napi_env env, napi_callback_info info) {
 // generic error handler:
 void handleApolloErrors(void* callbackReturn, apollo_handle_t session, uint16_t errCode, const char * errMsg) {
   // TODO: can this pipe through as an exception to node.js intead?
-  fprintf(stderr, "CPP: error %d %s\n", errCode, errMsg);
+  fprintf(stderr, "CPP: handleApolloErrors with err %d %s\n", errCode, errMsg);
 }
 
 napi_value init(napi_env env, napi_value exports) {
@@ -1008,7 +1036,7 @@ napi_value init(napi_env env, napi_value exports) {
   assert(napi_create_function(env, nullptr, 0, open, nullptr, &fn) == napi_ok);
   assert(napi_set_named_property(env, exports, "open", fn) == napi_ok);
   
-  printf("CPP: initializing module \n");
+  printf("CPP: napi init initializing module \n");
   
   return exports;
 }
