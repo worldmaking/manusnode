@@ -1,9 +1,10 @@
 #include <node_api.h>
-#include <apollosdk.hpp>
+#include <apollosdk.h>
 
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <malloc.h>
 
 // a C++ struct to hold all the persistent JS objects we need for an Apollo session:
 struct PersistentSessionData {
@@ -422,7 +423,6 @@ napi_value process(napi_env env, napi_callback_info args) {
   size_t nbytes;
   status = napi_get_arraybuffer_info(env, argv[0], (void **)&abdata, &nbytes);
   printf("CPP: napi process found data %lld %i\n", nbytes, abdata[0]);
-
   // outgoing packet to Apollo:
   // you need to make sure to prepend a 32-bit integer holding the outgoing byte stream length to the byte stream before committing it to Apollo through the TCP socket
   ApolloPacketBinary apb;
@@ -719,6 +719,8 @@ void handleRawStream(void* callbackReturn, apollo_handle_t session, const Apollo
 void handleDongleList(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const U64Array* const dongleList) {
   PersistentSessionData * data = (PersistentSessionData *)callbackReturn;
 
+  uint32_t numDongles = dongleList->size;
+
   printf("CPP: eventID: %d  |  dongles: %p\n", eventID, dongleList);
 
    // pull the session object back out of the napi_ref:
@@ -741,7 +743,16 @@ void handleDongleList(void* callbackReturn, apollo_handle_t session, uint16_t ev
   int argc = 2;
   napi_value argv[2];
   assert(napi_create_int32(data->env, eventID, &argv[0]) == napi_ok);
-  assert(napi_create_array_with_length(data->env, sizeof(dongleList), &argv[1]) == napi_ok);
+
+  assert(napi_create_array_with_length(data->env, numDongles, argv[1]) == napi_ok);
+  for (int i=0; i<numDongles;i++) {
+    // TODO should be uint64
+    napi_value val;
+    //napi_create_int32(data->env, dongleList->entries[i], &val);
+    napi_set_element(data->env, argv[1], i, val);
+  }
+
+  argv[1] = dongles;
   
   // pass this as an argument to the registered callback:
 	napi_value result;

@@ -28,7 +28,7 @@ client.connect(PORT, HOST, function() {
             if (eventId == 1) { console.log('NODE: handshake onSuccess eventId =', eventId) 
             //     eventId = 2 
             //     //source = 
-                   client.write(Buffer.from(session.listSources( eventId = 2 )))
+                  // client.write(Buffer.from(session.listSources( eventId = 2 )))
                    client.write(Buffer.from(session.listDongleID( eventId = 3 )))
             //     eventId = 3
             //     source2 = client.write(Buffer.from(session.getSourceInfo( source, eventId = 3 )))
@@ -65,8 +65,8 @@ client.connect(PORT, HOST, function() {
             console.log("NODE: got onRaw with args", args.join(","))
             // generateSetStreaRaw ?        
         },
-        onDongleList: function(...args) {
-            console.log("NODE: got onDongleList with args", args.join(","))
+        onDongleList: function(eventID, arr) {
+            console.log("NODE: got onDongleList with args", eventID, typeof arr, arr)
             // generateListDongleIDs ?
         },
         onDeviceList: function(...args) {
@@ -96,7 +96,7 @@ client.connect(PORT, HOST, function() {
     });
 
     client.on('data', function(data) {
-        console.log('NODE: new packet DATA: ' + data)
+        console.log('NODE: new packet DATA: ', typeof data, data.length, data.byteLength, data.byteOffset, data)
         // invoke the session's handlers for this packet:
         session.process(data.buffer)
         console.log("NODE: session.process | data processed")
