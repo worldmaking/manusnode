@@ -28,8 +28,8 @@ client.connect(PORT, HOST, function() {
             if (eventId == 1) { console.log('NODE: handshake onSuccess eventId =', eventId) 
             //     eventId = 2 
             //     //source = 
-                  // client.write(Buffer.from(session.listSources( eventId = 2 )))
-                   client.write(Buffer.from(session.listDongleID( eventId = 3 )))
+            client.write(Buffer.from(session.listSources( eventId = 2 )))
+            //client.write(Buffer.from(session.listDongleID( eventId = 3 )))
             //     eventId = 3
             //     source2 = client.write(Buffer.from(session.getSourceInfo( source, eventId = 3 )))
             //     eventId = 4
@@ -38,10 +38,13 @@ client.connect(PORT, HOST, function() {
             }
             if (eventId == 2) { 
                 console.log('NODE: listsources onSuccess eventId =', eventId) 
+                client.write(Buffer.from(session.listDongleID( eventId = 3 )))
                 //client.write(Buffer.from(session.getSourceInfo( source, eventId = 3 )))
             }
-            if (eventId == 3) { console.log('NODE: listDongleID onSuccess eventId =', eventId) }
-            if (eventId == 4) { console.log('NODE: setStreamData onSuccess eventId =', eventId) }
+            if (eventId == 3) { console.log('NODE: listDongleID onSuccess eventId =', eventId) 
+                client.write(Buffer.from(session.listDeviceID( eventId = 4 )))
+            }
+            if (eventId == 4) { console.log('NODE: listDeviceID onSuccess eventId =', eventId) }
             //if (eventId == 5) { console.log('NODE: addStreams onSuccess eventId =', eventId) }
 
             console.log("NODE: onSuccess complete")
@@ -66,11 +69,11 @@ client.connect(PORT, HOST, function() {
             // generateSetStreaRaw ?        
         },
         onDongleList: function(eventID, arr) {
-            console.log("NODE: got onDongleList with args", eventID, typeof arr, arr)
+            console.log("NODE: got onDongleList with args", eventID, typeof arr, arr, arr[0])
             // generateListDongleIDs ?
         },
         onDeviceList: function(...args) {
-            console.log("NODE: got onDeviceList with args", args.join(","))
+            console.log("NODE: got onDeviceList with args", eventID, typeof arr, arr, arr[0])
             // generateListDeviceIDs ?
         },
         onDeviceInfo: function(...args) {
@@ -79,8 +82,8 @@ client.connect(PORT, HOST, function() {
         },
         onSourcesList: function(...args) {
             // eventId = 2
-            console.log("NODE: got onSourcesList with args", args.join(","))
-            //>>> client.write(Buffer.from(session.listSources( eventId = 2 )))
+            //console.log("NODE: got onSourcesList with args", args.join(","))
+            console.log("NODE: got onSourcesList with args", eventID, typeof arr, arr, arr[0])
             // generateListSources ?
         },
         onSourceInfo: function(...args) {
