@@ -1,11 +1,16 @@
 const manus = require('bindings')('manusnode.node')
 
 const net = require('net')
+// const { PromiseSocket } = require('promise-socket')
+// const { PromiseWritable } = require('promise-writable')
+// const { spawnSync } = require('child_process')
 
 const HOST = '127.0.0.1'
 const PORT = 49010
 
 const client = new net.Socket()
+// const promiseClient = new PromiseSocket(client)
+// const promiseWritable = new PromiseWritable(stream)
 
 // TODO: clean up once working for full handling
 client.connect(PORT, HOST, function() {
@@ -16,26 +21,32 @@ client.connect(PORT, HOST, function() {
             // send the packet back to server to confirm:
             let buf = Buffer.from(packet)
             console.log(buf)
+            // promiseClient.write(buf)
             client.write(buf)
             console.log("NODE: sent onHandshake back to server to confirm")
         },
-        onSuccess: function(eventId, ...args) {
-            console.log("NODE: got onSuccess with args", eventId, args.join(","))
+        onSuccess: function(eventID, ...args) {
+            console.log("NODE: got onSuccess with args", eventID, args.join(","))
             // eventID should be used to figure out which generateXX() the onSuccess relates to
             // TODO: chain the eventId triggers
             // we set event == 1 for the handshake in session.handshake(-):
-            if (eventId == 1) { 
-                console.log('NODE: handshake onSuccess eventId =', eventId) 
-                client.write(Buffer.from(session.listSources( eventId = 2 )), null, function() {
-                    client.write(Buffer.from(session.listDongleID( eventId = 3 )), null, function() {
-                        console.log("NODE: We are inside the chain")
-                        client.write(Buffer.from(session.listDeviceID( eventId = 4 )))
-                        // client.write(Buffer.from(session.getSourceInfo( eventId =  )))
-                        // client.write(Buffer.from(session.setStreamData( dataEnabled = true, eventId =  )))
-                    })
+            if (eventID == 1) { 
+                console.log('NODE: onSuccess eventId =', eventID)
+                // promiseClient.write
+                client.write(Buffer.from(session.listSources( eventID = 2 )), null, function() {
+                    
+                    console.log("NODE: we are inside listSources ", eventID)
+                    // client.write(Buffer.from(session.listDongleID( eventID = 3 )), null, function() {
+                    //     console.log("NODE: We are inside listDongleID ", eventID)
+                    //     client.write(Buffer.from(session.listDeviceID( dongleID = 0, eventID = 4 )), null, function() {
+                    //         console.log("NODE: We are inside listDeviceID ". eventID)
+                    //         // client.write(Buffer.from(session.getSourceInfo( eventId =  )))
+                    //         // client.write(Buffer.from(session.setStreamData( dataEnabled = true, eventId =  )))
+                    //     })
+                    // })
                 })
             }
-            console.log("NODE: onSuccess complete for event", eventId)
+            console.log("NODE: onSuccess complete for event", eventID)
         },
         onFail: function(eventID, arr) {
             //console.log("NODE: got onFail with args", args.join(","))
@@ -88,9 +99,11 @@ client.connect(PORT, HOST, function() {
     })
 
     client.on('data', function(data) {
+        console.log('NODE: eventID =', eventID)
         console.log('NODE: new packet DATA: ', typeof data, data.length, data.byteLength, data.byteOffset, data)
         // invoke the session's handlers for this packet:
         session.process(data.buffer)
+        console.log('NODE: eventID =', eventID)
         console.log("NODE: session.process | data processed")
     })
     
@@ -109,7 +122,10 @@ client.connect(PORT, HOST, function() {
     
     // try to handshake with Apollo:
     // set eventId == 1 for the handshake success:
-    console.log('NODE: session.handshake sending eventID = ' + eventId)
-    client.write(Buffer.from(session.handshake( eventId = 1 )))
+    eventID = 0
+    dongleID = 0
+    //sourceList = 0
+    console.log('NODE: session.handshake sending eventID = ' + eventID)
+    // promiseClient.write
+    client.write(Buffer.from(session.handshake( eventID = 1 )))
 })
-

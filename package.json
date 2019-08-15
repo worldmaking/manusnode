@@ -22,7 +22,8 @@
   },
   "homepage": "https://github.com/worldmaking/manusnode#readme",
   "dependencies": {
-    "bindings": "^1.5.0"
+    "bindings": "^1.5.0",
+    "promise-socket": "^6.0.0"
   },
   "gypfile": true
 }
