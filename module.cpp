@@ -65,7 +65,7 @@ napi_value listSources(napi_env env, napi_callback_info args) {
   ((uint32_t *)(abdata))[0] = apb.bytes;
 
   //printf("packet %d %s\n", apb.bytes+4, apb.payload);
-  printf("CPP: napi sending listsources event %d packet x%d - %s\n", eventId, apb.bytes+4, apb.payload);
+  printf("CPP: napi sending listsources event %d packet x%d - %d\n", eventId, apb.bytes+4, (int)apb.payload[0]);
 
   // cleanup
   apolloDisposePacket(apb);
@@ -578,7 +578,7 @@ void handleSourcesList(void* callbackReturn, apollo_handle_t session, uint16_t e
   uint32_t numSources = sourceList->size;
 
   // generate list of sources connected to Apollo, i.e., L and R glove
-  printf("CPP: eventID: %d  |  sources: %p\n", eventID, sourceList);
+  printf("CPP: eventID: %d  |  sources: %d %p\n", eventID, numSources, sourceList);
 
   // pull the session object back out of the napi_ref:
 	napi_value sessionObject; 
@@ -588,13 +588,13 @@ void handleSourcesList(void* callbackReturn, apollo_handle_t session, uint16_t e
   napi_typeof(data->env, sessionObject, &resultType);
   assert(resultType == napi_object);
 
-  // printf("CPP: handleSourcesList with object %p\n", sessionObject);
+  //printf("CPP: handleSourcesList with object %p\n", sessionObject);
 
   // pull the callback function back out of the napi_ref:
 	napi_value callback; 
-	napi_get_reference_value(data->env, data->onSourcesListRef, &callback);
+	assert(napi_ok == napi_get_reference_value(data->env, data->onSourcesListRef, &callback));
 	
-    // printf("CPP: handleSourcesList with callback %p\n", callback);
+  //printf("CPP: handleSourcesList with callback %p\n", callback);
 
 	// call it: 
   int argc = 2;
@@ -612,8 +612,8 @@ void handleSourcesList(void* callbackReturn, apollo_handle_t session, uint16_t e
 	napi_value result;
 	assert(napi_call_function(data->env, sessionObject, callback, argc, argv, &result) == napi_ok);
 
-  printf("CPP: handleSourcesList complete\n");
 
+  printf("CPP: handleSourcesList complete\n");
 }
 
 void handleSourceInfo(void* callbackReturn, apollo_handle_t session, uint16_t eventID, const ApolloSourceInfo * const info) {
