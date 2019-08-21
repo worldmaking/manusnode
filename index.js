@@ -30,22 +30,22 @@ client.connect(PORT, HOST, function() {
             // eventID should be used to figure out which generateXX() the onSuccess relates to
             // TODO: chain the eventId triggers
             // we set event == 1 for the handshake in session.handshake(-):
-            if (eventID == 1) { 
-                console.log('NODE: onSuccess eventId =', eventID)
-                // promiseClient.write
-                client.write(Buffer.from(session.listSources( eventID = 2 )), null, function() {
+            // if (eventID == 1) { 
+            //     console.log('NODE: onSuccess eventId =', eventID)
+            //     // promiseClient.write
+            //     client.write(Buffer.from(session.listSources( eventID = 2 )), null, function() {
                     
-                    console.log("NODE: we are inside listSources ", eventID)
-                    // client.write(Buffer.from(session.listDongleID( eventID = 3 )), null, function() {
-                    //     console.log("NODE: We are inside listDongleID ", eventID)
-                    //     client.write(Buffer.from(session.listDeviceID( dongleID = 0, eventID = 4 )), null, function() {
-                    //         console.log("NODE: We are inside listDeviceID ". eventID)
-                    //         // client.write(Buffer.from(session.getSourceInfo( eventId =  )))
-                    //         // client.write(Buffer.from(session.setStreamData( dataEnabled = true, eventId =  )))
-                    //     })
-                    // })
-                })
-            }
+            //         console.log("NODE: we are inside listSources ", eventID)
+            //         client.write(Buffer.from(session.listDongleID( eventID = 3 )), null, function() {
+            //             console.log("NODE: We are inside listDongleID ", eventID)
+            //         //     client.write(Buffer.from(session.listDeviceID( dongleID = 0, eventID = 4 )), null, function() {
+            //         //         console.log("NODE: We are inside listDeviceID ". eventID)
+            //         //         // client.write(Buffer.from(session.getSourceInfo( eventId =  )))
+            //         //         // client.write(Buffer.from(session.setStreamData( dataEnabled = true, eventId =  )))
+            //         //     })
+            //         })
+            //     })
+            // }
             console.log("NODE: onSuccess complete for event", eventID)
         },
         onFail: function(eventID, arr) {
@@ -99,12 +99,23 @@ client.connect(PORT, HOST, function() {
     })
 
     client.on('data', function(data) {
-        console.log('NODE: eventID =', eventID)
+        console.log('NODE: before process data.buffer eventID =', eventID)
         console.log('NODE: new packet DATA: ', typeof data, data.length, data.byteLength, data.byteOffset, data)
         // invoke the session's handlers for this packet:
         session.process(data.buffer)
-        console.log('NODE: eventID =', eventID)
+        console.log('NODE: after process data.buffer eventID =', eventID)
         console.log("NODE: session.process | data processed")
+        if (eventID == 1) {// && tick == 0) {
+            eventID = 2
+            client.write(Buffer.from(session.listSources( eventID = 2 )))
+        } else if (eventID == 2) { //} && tick == 1) {
+            eventID = 3
+            client.write(Buffer.from(session.listDongleID( eventID = 3 )))
+        } else if (eventID == 3) {
+            eventID = 4
+            client.write(Buffer.from(session.listDeviceID( dongleID = 0, eventID = 4 )))
+        }
+        //tick++ 
     })
     
     client.on('close', function() {
@@ -122,6 +133,7 @@ client.connect(PORT, HOST, function() {
     
     // try to handshake with Apollo:
     // set eventId == 1 for the handshake success:
+    tick = 0
     eventID = 0
     dongleID = 0
     //sourceList = 0
