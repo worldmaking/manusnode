@@ -24,29 +24,12 @@ client.connect(PORT, HOST, function() {
             // promiseClient.write(buf)
             client.write(buf)
             console.log("NODE: sent onHandshake back to server to confirm")
+            //eventID = 1
         },
         onSuccess: function(eventID, ...args) {
             console.log("NODE: got onSuccess with args", eventID, args.join(","))
-            // eventID should be used to figure out which generateXX() the onSuccess relates to
-            // TODO: chain the eventId triggers
-            // we set event == 1 for the handshake in session.handshake(-):
-            // if (eventID == 1) { 
-            //     console.log('NODE: onSuccess eventId =', eventID)
-            //     // promiseClient.write
-            //     client.write(Buffer.from(session.listSources( eventID = 2 )), null, function() {
-                    
-            //         console.log("NODE: we are inside listSources ", eventID)
-            //         client.write(Buffer.from(session.listDongleID( eventID = 3 )), null, function() {
-            //             console.log("NODE: We are inside listDongleID ", eventID)
-            //         //     client.write(Buffer.from(session.listDeviceID( dongleID = 0, eventID = 4 )), null, function() {
-            //         //         console.log("NODE: We are inside listDeviceID ". eventID)
-            //         //         // client.write(Buffer.from(session.getSourceInfo( eventId =  )))
-            //         //         // client.write(Buffer.from(session.setStreamData( dataEnabled = true, eventId =  )))
-            //         //     })
-            //         })
-            //     })
-            // }
             console.log("NODE: onSuccess complete for event", eventID)
+            //eventID = 1
         },
         onFail: function(eventID, arr) {
             //console.log("NODE: got onFail with args", args.join(","))
@@ -72,14 +55,17 @@ client.connect(PORT, HOST, function() {
             //console.log("NODE: got onSourcesList with args", args.join(","))
             console.log("NODE: got onSourcesList with args", eventID, typeof arr, arr, arr[0])
             // generateListSources ?
+            //TODO: need to store the source list to pass into other functions that expect it
         },
         onDongleList: function(eventID, arr) {
             console.log("NODE: got onDongleList with args", eventID, typeof arr, arr, arr[0])
             // generateListDongleIDs ?
+            //TODO: need to store the dongle list to pass into other functions that expect it
         },
         onDeviceList: function(eventID, arr) {
             console.log("NODE: got onDeviceList with args", eventID, typeof arr, arr, arr[0])
             // generateListDeviceIDs ?
+            //TODO: need to store the device list to pass into other functions that expect it
         },
         onDeviceInfo: function(eventID, arr) {
             //console.log("NODE: got onDeviceInfo with args", args.join(","))
@@ -102,6 +88,7 @@ client.connect(PORT, HOST, function() {
         console.log('NODE: before process data.buffer eventID =', eventID)
         console.log('NODE: new packet DATA: ', typeof data, data.length, data.byteLength, data.byteOffset, data)
         // invoke the session's handlers for this packet:
+        // packetneeded = session.process(data.buffer)
         session.process(data.buffer)
         console.log('NODE: after process data.buffer eventID =', eventID)
         console.log("NODE: session.process | data processed")
@@ -113,7 +100,20 @@ client.connect(PORT, HOST, function() {
             client.write(Buffer.from(session.listDongleID( eventID = 3 )))
         } else if (eventID == 3) {
             eventID = 4
-            client.write(Buffer.from(session.listDeviceID( dongleID = 0, eventID = 4 )))
+            client.write(Buffer.from(session.listDeviceID( dongleID = 1451297653, eventID = 4 )))
+        } else if (eventID == 4) {
+            eventID = 6
+            client.write(Buffer.from(session.setStreamRaw( source = 26953288, rawEnabled = true, eventID = 6 )))    
+            //     eventID = 5
+        //     client.write(Buffer.from(session.queryEvent( eventID = 5)))
+        // } else if (eventID == 5) {
+            // if (rawEnabled == 1 && dataEnabled == 0) {
+            //     eventID = 6
+            //     client.write(Buffer.from(session.setStreamRaw( source = 26953288, rawEnabled = 1, eventID = 6 )))
+            // } else if (rawEnabled == 0 && dataEnabled == 1){
+            //     eventID = 7
+            //     client.write(Buffer.from(session.setStreamData( source = 26953288, dataEnabled = 1, eventID = 7 )))
+            // }
         }
         //tick++ 
     })
@@ -135,8 +135,11 @@ client.connect(PORT, HOST, function() {
     // set eventId == 1 for the handshake success:
     tick = 0
     eventID = 0
-    dongleID = 0
-    //sourceList = 0
+    dongleID = 0 // dongleID = 1451297653
+    deviceID = 0 // deviceID = 26953288 left? 506804634 right?
+    rawEnabled = false
+    dataEnabled = false
+    sourceList = 0
     console.log('NODE: session.handshake sending eventID = ' + eventID)
     // promiseClient.write
     client.write(Buffer.from(session.handshake( eventID = 1 )))
