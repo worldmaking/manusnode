@@ -49,7 +49,7 @@ napi_value listSources(napi_env env, napi_callback_info args) {
   PersistentSessionData * data; // the C++ data we can associate with a function
   assert(napi_get_cb_info(env, args, &argc, argv, NULL, (void **)&data) == napi_ok);
   
-  int32_t eventId = 1; //= 0;
+  int32_t eventId = 0;
   napi_get_value_int32(env, argv[0], &eventId);
   //printf("CPP : napi listSources event %d\n", eventId);
   ApolloPacketBinary apb = generateListSources(data->sessionHandle, eventId); 
@@ -64,7 +64,7 @@ napi_value listSources(napi_env env, napi_callback_info args) {
   ((uint32_t *)(abdata))[0] = apb.bytes;
 
   //printf("packet %d %s\n", apb.bytes+4, apb.payload);
-  printf("CPP : napi sending listsources event %d packet x%d - %d\n", eventId, apb.bytes+4, (int)apb.payload[0]);
+  printf("CPP : napi sending listsources event %d packet size %d content %d\n", eventId, apb.bytes+4, (int)apb.payload[0]);
 
   // cleanup
   apolloDisposePacket(apb);
@@ -72,7 +72,7 @@ napi_value listSources(napi_env env, napi_callback_info args) {
   return ab;
 }
 
-napi_value listDongleID(napi_env env, napi_callback_info args) {
+napi_value listDongleIDs(napi_env env, napi_callback_info args) {
   size_t argc = 1; // how many args we want
   napi_value argv[1];
   PersistentSessionData * data; // the C++ data we can associate with a function
@@ -100,7 +100,7 @@ napi_value listDongleID(napi_env env, napi_callback_info args) {
   return ab;
 }
 
-napi_value listDeviceID(napi_env env, napi_callback_info args) {
+napi_value listDeviceIDs(napi_env env, napi_callback_info args) {
   size_t argc = 2; // how many args we want
   napi_value argv[2];
   PersistentSessionData * data; // the C++ data we can associate with a function
@@ -161,15 +161,25 @@ napi_value getDeviceInfo(napi_env env, napi_callback_info args) {
 }
 
 napi_value getSourceInfo(napi_env env, napi_callback_info args) {
-  size_t argc = 2; // how many args we want
-  napi_value argv[2];
+  size_t argc = 3; // how many args we want
+  napi_value argv[3];
   PersistentSessionData * data; // the C++ data we can associate with a function
   assert(napi_get_cb_info(env, args, &argc, argv, NULL, (void **)&data) == napi_ok);
   
-  int64_t source = 0;
+  uint64_t * sourceList;
+  int32_t sourceIdx = 0;
   int32_t eventId = 0;
-  napi_get_value_int64(env, argv[0], &source);
-  napi_get_value_int32(env, argv[1], &eventId);
+  napi_typedarray_type abtype;
+  size_t len;
+  assert(napi_ok == napi_get_typedarray_info(env, argv[0], &abtype, &len, (void **)&sourceList, nullptr, nullptr));
+  assert(napi_ok == napi_get_value_int32(env, argv[1], &sourceIdx));
+  assert(napi_ok == napi_get_value_int32(env, argv[2], &eventId));
+  assert(sourceIdx < len);
+
+  uint64_t source = sourceList[sourceIdx];
+  
+  //printf("packet %d %s\n", apb.bytes+4, apb.payload);
+  printf("CPP : napi making getsourceinfo source %u and event %d len %d\n", source, eventId, len);
   ApolloPacketBinary apb = generateGetSourceInfo(data->sessionHandle, source, eventId); 
 
   // incoming packet from Apollo:
@@ -419,16 +429,29 @@ napi_value process(napi_env env, napi_callback_info args) {
   if (argc < 1) return nullptr;
 
   // verify args[0] is an arraybuffer
-  uint32_t * abdata;
+  char * abdata;
   size_t nbytes;
   status = napi_get_arraybuffer_info(env, argv[0], (void **)&abdata, &nbytes);
-  printf("CPP : napi_process found data %lld %i\n\n", nbytes, abdata[0]);
-  // outgoing packet to Apollo:
-  // you need to make sure to prepend a 32-bit integer holding the outgoing byte stream length to the byte stream before committing it to Apollo through the TCP socket
-  ApolloPacketBinary apb;
-  apb.bytes = nbytes-4;
-  apb.payload = ((char *)(abdata))+4;
-  apolloProcessPacket(data->sessionHandle, &apb);
+  printf("CPP : napi_process found data %lld %i\n\n", nbytes, ((uint32_t *)abdata)[0]);
+
+  //assert(nbytes == abdata[0] + 4, "packet size does not match header");
+
+  size_t processed = 0;
+  while (processed < nbytes) {
+    size_t packetsize = ((uint32_t *)abdata)[0] + 4;
+
+    //printf("processing packet size %d processed %d nbytes %d\n", packetsize, processed, nbytes);
+    
+    // outgoing packet to Apollo:
+    // you need to make sure to prepend a 32-bit integer holding the outgoing byte stream length to the byte stream before committing it to Apollo through the TCP socket
+    ApolloPacketBinary apb;
+    apb.bytes = packetsize-4;
+    apb.payload = abdata+4;
+    apolloProcessPacket(data->sessionHandle, &apb);
+
+    abdata += packetsize;
+    processed += packetsize;
+  }
 
   // cleanup? (crashes, so commented it out)
   //apolloDisposePacket(apb);
@@ -503,7 +526,7 @@ void handleSourcesList(void* callbackReturn, apollo_handle_t session, uint16_t e
   uint32_t numSources = sourceList->size;
 
   // // generate list of sources connected to Apollo, i.e., L and R glove
-  //printf("CPP : eventID: %d  |  sources: %d - %d\n", eventID, numSources, sourceList[0]);
+  printf("CPP : eventID: %d  |  sources: %d - %u\n", eventID, numSources, sourceList->entries[0]);
 
   // pull the session object back out of the napi_ref:
 	napi_value sessionObject; 
@@ -538,7 +561,7 @@ void handleSourcesList(void* callbackReturn, apollo_handle_t session, uint16_t e
 	assert(napi_call_function(data->env, sessionObject, callback, argc, argv, &result) == napi_ok);
 
  // generate list of sources connected to Apollo, i.e., L and R glove
-  printf("CPP : eventID: %d  |  sources: %d - %d\n", eventID, numSources, sourceList[0]);
+  printf("CPP : eventID: %d  |  sources: %d - %u\n", eventID, numSources, sourceList->entries[0]);
   printf("CPP : handleSourcesList complete\n");
 }
 
@@ -567,8 +590,13 @@ void handleSourceInfo(void* callbackReturn, apollo_handle_t session, uint16_t ev
 	// call it: 
   int argc = 2;
   napi_value argv[2];
+  void * abdata;
   assert(napi_create_int32(data->env, eventID, &argv[0]) == napi_ok);
-  assert(napi_create_array_with_length(data->env, sizeof(info), &argv[1]) == napi_ok);
+  //assert(napi_create_array_with_length(data->env, sizeof(info), &argv[1]) == napi_ok);
+  assert(napi_ok == napi_create_arraybuffer(data->env, sizeof(ApolloSourceInfo), &abdata, &argv[1]));
+  memcpy(abdata, info, sizeof(ApolloSourceInfo));
+
+  printf("offsets deviceID %u sizeof apollo_laterality_t %u\n", offsetof(ApolloSourceInfo, deviceID), sizeof(apollo_laterality_t));
   
   // pass this as an argument to the registered callback:
 	napi_value result;
@@ -1025,10 +1053,10 @@ napi_value open(napi_env env, napi_callback_info info) {
   assert(napi_create_function(env, "getSourceInfo", 0, getSourceInfo, data, &fn) == napi_ok);
   assert(napi_set_named_property(env, sessionObject, "getSourceInfo", fn) == napi_ok);
 
-  assert(napi_create_function(env, "listDongleID", 0, listDongleID, data, &fn) == napi_ok);
-  assert(napi_set_named_property(env, sessionObject, "listDongleID", fn) == napi_ok);
-  assert(napi_create_function(env, "listDeviceID", 0, listDeviceID, data, &fn) == napi_ok);
-  assert(napi_set_named_property(env, sessionObject, "listDeviceID", fn) == napi_ok);
+  assert(napi_create_function(env, "listDongleIDs", 0, listDongleIDs, data, &fn) == napi_ok);
+  assert(napi_set_named_property(env, sessionObject, "listDongleIDs", fn) == napi_ok);
+  assert(napi_create_function(env, "listDeviceIDs", 0, listDeviceIDs, data, &fn) == napi_ok);
+  assert(napi_set_named_property(env, sessionObject, "listDeviceIDs", fn) == napi_ok);
   assert(napi_create_function(env, "getDeviceInfo", 0, getDeviceInfo, data, &fn) == napi_ok);
   assert(napi_set_named_property(env, sessionObject, "getDeviceInfo", fn) == napi_ok);
 
