@@ -14,7 +14,6 @@ send manus handshake id=1
 receive packet -> process.buffer -> onHandshake()
     -> send packet back to server to confirm (id still 1)
 
-
 receive packet -> process.buffer -> onSuccess, id = 1
     (handshake confirmed)
     send listSources packet id=2
@@ -30,16 +29,11 @@ receive packet -> process.buffer -> onSourceInfo, id = 3-6
 */
 
 const net = require('net')
-// const { PromiseSocket } = require('promise-socket')
-// const { PromiseWritable } = require('promise-writable')
-// const { spawnSync } = require('child_process')
 
 const HOST = '127.0.0.1'
 const PORT = 49010
 
 const client = new net.Socket()
-// const promiseClient = new PromiseSocket(client)
-// const promiseWritable = new PromiseWritable(stream)
 
 let nextEventID = 2
 
@@ -59,44 +53,23 @@ client.connect(PORT, HOST, function() {
 
             client.write(Buffer.from(session.listSources(nextEventID++)))
             client.write(Buffer.from(session.listDongleIDs(nextEventID++)))
-
+            // client.write(Buffer.from(session.listDeviceIDs(nextEventID++)))
         },
         onSuccess: function(eventID, ...args) {
             console.log("NODE: got onSuccess with args", eventID, args.join(","))
-           
-
-            // } else if (eventID == 2) { //} && tick == 1) {
-            //     eventID = 3
-            //     client.write(Buffer.from(session.listDongleID( eventID = 3 )))
-            // } else if (eventID == 3) {
-            //     eventID = 4
-            //     
-            // } else if (eventID == 4) {
-            //     eventID = 6
-            //     client.write(Buffer.from(session.setStreamRaw( source = 26953288, rawEnabled = true, eventID = 6 )))    
-            //     //     eventID = 5
-            // //     client.write(Buffer.from(session.queryEvent( eventID = 5)))
-            // // } else if (eventID == 5) {
-            //     // if (rawEnabled == 1 && dataEnabled == 0) {
-            //     //     eventID = 6
-            //     //     client.write(Buffer.from(session.setStreamRaw( source = 26953288, rawEnabled = 1, eventID = 6 )))
-            //     // } else if (rawEnabled == 0 && dataEnabled == 1){
-            //     //     eventID = 7
-            //     //     client.write(Buffer.from(session.setStreamData( source = 26953288, dataEnabled = 1, eventID = 7 )))
-            //     // }
         },
-        
+        onFail: function(eventID, ...args) {
+            console.log("NODE: got onFail with args", eventID, args.join(","))
+        }, 
         onSourcesList: function(eventID, sourceList) {
             //console.log("NODE: got onSourcesList with args", args.join(","))
             console.log("NODE: onSourcesList with args", eventID, typeof sourceList, sourceList)
-
             console.log(`NODE: onSourcesList: id=${eventID} arr=${sourceList}, len=${sourceList.length}`)
 
             // generateListSources ?
             //TODO: need to store the source list to pass into other functions that expect it
 
             for (let i=0; i<sourceList.length; i++) {
-            
                 console.log(`NODE: generate get source info for source ${sourceList[i]}`)
                 let s = sourceList[i];
                 console.log(typeof s)
@@ -109,8 +82,8 @@ client.connect(PORT, HOST, function() {
             /*
             struct ApolloSourceInfo
             {
-            0    uint64_t endpoint;                  /// this source's endpoint ID
-            8    apollo_source_t sourceType;         /// type of source
+            0     uint64_t endpoint;                  /// this source's endpoint ID
+            8     apollo_source_t sourceType;         /// type of source
             12    ApolloFilterChainInfo filterInfo;   /// filter chain information. IMPORTANT: only valid if sourceType == SOURCE_FILTERED
             30    uint64_t deviceID;                  /// device ID of source. IMPORTANT: only valid if sourceType == SOURCE_DEVICEDATA
             38    apollo_laterality_t side;           /// info on whether source device is a left or a right glove. IMPORTANT: only valid if sourceType == SOURCE_DEVICEDATA
@@ -124,53 +97,74 @@ client.connect(PORT, HOST, function() {
             console.log(`NODE: onSourceInfo event=${eventID}, sourcetype=${sourceType} endpoint=${endpoint}, deviceID=${deviceID}, side=${side}`)
 
             // gnereateGetSourceInfo ?
-        },
-        
-        onDongleList: function(eventID, arr) {
-            console.log("NODE: got onDongleList with args", eventID, typeof arr, arr, arr[0])
+        },        
+        onDongleList: function(eventID, dongleList) {
+            console.log("NODE: onDongleList with args", eventID, typeof dongleList, dongleList)
+            console.log(`NODE: onDongleList: id=${eventID} arr=${dongleList}, len=${dongleList.length}`)
             // generateListDongleIDs ?
             //TODO: need to store the dongle list to pass into other functions that expect it
 
-            // for (let i=0; i<dongleList.length; i++) {
-            
-            //     console.log(`NODE: generate get source info for source ${dongleList[i]}`)
-            //     let s = sourceList[i];
-            //     console.log(typeof s)
-            //     client.write(Buffer.from(session.listDeviceIDs(dongleList, i, nextEventID++)))
-            // }
+            for (let i=0; i<dongleList.length; i++) {
+                console.log(`NODE: generate get dongle info for dongle ${dongleList[i]}`)
+                let d = dongleList[i];
+                console.log(typeof d)
+                client.write(Buffer.from(session.listDeviceIDs(dongleList, i, nextEventID++)))
+            }
         },
-        onDeviceList: function(eventID, arr) {
-            console.log("NODE: got onDeviceList with args", eventID, typeof arr, arr, arr[0])
+        onDeviceList: function(eventID, deviceList) {
+            console.log("NODE: onDeviceList with args", eventID, typeof deviceList, deviceList)
+            console.log(`NODE: onDeviceList: id=${eventID} arr=${deviceList}, len=${deviceList.length}`)
             // generateListDeviceIDs ?
             //TODO: need to store the device list to pass into other functions that expect it
 
-            //client.write(Buffer.from(session.listDeviceID( dongleID = 1451297653, eventID = 4 )))
+            for (let i=0; i<deviceList.length; i++) {
+                console.log(`NODE: generate get device info for device ${deviceList[i]}`)
+                let d = deviceList[i];
+                console.log(typeof d)
+                client.write(Buffer.from(session.getDeviceInfo(deviceList, i, nextEventID++)))
+            }
         },
+        onDeviceInfo: function(eventID, buf) {
 
-        onFail: function(eventID, arr) {
-            //console.log("NODE: got onFail with args", args.join(","))
-            console.log("NODE: got onFail with args", eventID, typeof arr, arr, arr[0])
-            // generate-- any data we can get? 
-            // access apollo error handler? > handleApolloErrors ?
-            // generateStopStreams ?
-            // generateRemoveStreams ?
-            // reset any stored lists etc >?
+            console.log("NODE: onDeviceInfo")
+            /*
+            struct ApolloDeviceInfo
+            {
+            0     uint64_t deviceID;              /// this device's hardware identifier
+            8     uint64_t pairedDongleID;        /// hardware identifier of the dongle that this device is paired to
+            16    apollo_laterality_t hand;       /// info on whether this device is a left or a right glove
+            20    apollo_dev_t devType;           /// the device's fabrication type
+                uint8_t batteryPercent;         /// battery charge in percent
+                int16_t signalAttenuationDb;    /// signal attenuation in dB
+            };
+           */
+
+            let deviceID = new DataView(buf, 0).getBigUint64(0, true)
+            let pairedDongleID = new DataView(buf, 8).getBigUint64(0, true)
+            let hand = new DataView(buf, 16).getInt32(0, true)
+            console.log(`NODE: onDeviceInfo event=${eventID}, deviceID=${deviceID} dongleID=${pairedDongleID}, hand=${hand}`)        
         },
-        onData: function(eventID, arr) {
-            // eventId = 4
+        onData: function(eventID, buf) {
             //console.log("NODE: got onData with args", args.join(","))
+
+            /*
+            struct ApolloJointData
+            {
+                uint64_t endpointID;                /// source endpoint identifier
+                uint64_t deviceID;                  /// device from which original data has been sent
+                float wristOrientation[4];          /// quaternion representation of the wrist orientation (w[0], x[1], y[2]. z[3])
+                float jointOrientations[5][5][4];   /// orientation for thumb[0], index[1], middle[2], ring[3], pinky[4] finger skeletal joints:
+                                                    /// base[0], CMC/MCP[1], MCP/PIP[2], IP/DIP[3], tip[4] (named for thumb/other fingers)
+                                                    /// as quaternions in the form of w[0], x[1], y[2], z[3]
+            };
+            */
             console.log("NODE: got onData with args", eventID, typeof arr, arr, arr[0])
             // generateSetStreamData ?
         },
-        onRaw: function(eventID, arr) {
+        onRaw: function(eventID, buf) {
             //console.log("NODE: got onRaw with args", args.join(","))
             console.log("NODE: got onRaw with args", eventID, typeof arr, arr, arr[0])
             // generateSetStreaRaw ?        
-        },
-        onDeviceInfo: function(eventID, arr) {
-            //console.log("NODE: got onDeviceInfo with args", args.join(","))
-            console.log("NODE: got onDeviceInfo with args", eventID, typeof arr, arr, arr[0])
-            // generateGetDeviceInfo ?            
         },
         onQuery: function(eventID, arr) {
             //console.log("NODE: got onQuery with args", args.join(","))
@@ -184,8 +178,8 @@ client.connect(PORT, HOST, function() {
         // invoke the session's handlers for this packet:
         // packetneeded = session.process(data.buffer)
         // process a duplicate packet:
-        let pkt = data.buffer.slice(0)
-
+        // let pkt = data.buffer.slice(0)
+        let pkt = data.buffer
 
         session.process(pkt)
         console.log('NODE: after process data.buffer')
@@ -204,16 +198,13 @@ client.connect(PORT, HOST, function() {
         // disconnect client & session.close() ?
     })
     
-    // // try to handshake with Apollo:
-    // // set eventId == 1 for the handshake success:
-    // tick = 0
-    // eventID = 0
+    // try to handshake with Apollo:
+    // set eventId == 1 for the handshake success:
     // dongleID = 0 // dongleID = 1451297653
-    // deviceID = 0 // deviceID = 26953288 left? 506804634 right?
-    // rawEnabled = false
+    // deviceID = 0 // deviceID = 26953288 left || 506804634 right
+    // rawEnabled = true
     // dataEnabled = false
     // sourceList = 0
     console.log('NODE: session.handshake sending eventID = 1')
-    // promiseClient.write
     client.write(Buffer.from(session.handshake(1)))
 })
