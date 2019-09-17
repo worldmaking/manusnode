@@ -282,7 +282,7 @@ napi_value setStreamData(napi_env env, napi_callback_info args) {
   ((uint32_t *)(abdata))[0] = apb.bytes;
 
   //printf("packet %d %s\n", apb.bytes+4, apb.payload);
-  printf("CPP : napi sending setstreamdata source %I32d data Y/N %d event %d packet x%d %s\n", source, dataEnabled, eventId, apb.bytes+4, apb.payload);
+  printf("CPP : napi sending setstreamdata source %I64d data Y/N %d event %d packet size %d content %s\n", source, dataEnabled, eventId, apb.bytes+4, apb.payload);
 
   // cleanup
   apolloDisposePacket(apb);
@@ -303,7 +303,7 @@ napi_value setStreamRaw(napi_env env, napi_callback_info args) {
   napi_typedarray_type abtype;
   size_t len;
   //assert(napi_get_value_uint32(env, argv[0], &source) == napi_ok);
-  //assert(napi_get_typedarray_info(env, argv[0], &abtype, &len, (void **)&sourceList, nullptr, nullptr) == napi_ok);
+  assert(napi_get_typedarray_info(env, argv[0], &abtype, &len, (void **)&sourceList, nullptr, nullptr) == napi_ok);
   assert(napi_get_value_bool(env, argv[1], &rawEnabled) == napi_ok);
   assert(napi_get_value_int32(env, argv[2], &sourceIdx) == napi_ok);
   assert(napi_get_value_int32(env, argv[3], &eventId) == napi_ok);
@@ -433,7 +433,7 @@ napi_value addFilters(napi_env env, napi_callback_info args) {
   uint64_t const * sources;
   uint32_t numSources = 0;
   // TODO: 
-  // apollo_filter_handle_t * const filterHandles --> need to look up this type
+  apollo_filter_handle_t * const filterHandles = 0; // --> need to look up this type
   uint32_t numFilters = 0;
   int32_t eventId = 0;
 
@@ -446,7 +446,7 @@ napi_value addFilters(napi_env env, napi_callback_info args) {
   assert(napi_get_value_int32(env, argv[4], &eventId) == napi_ok);
 
   printf("CPP : napi making addfilters event %d\n", eventId);
-  ApolloPacketBinary apb = generateAddFilters(data->sessionHandle, sources, numSources, filterHandles, numFilters, eventId); 
+  ApolloPacketBinary apb = generateAddFilters(data->sessionHandle, sources, numSources, filterHandles, numFilters, eventId);
 
   // incoming packet from Apollo:
   // you need to consider that a 32-bit integer holding the incoming byte stream has been prepended by Apollo
@@ -524,8 +524,8 @@ napi_value deviceVibrate(napi_env env, napi_callback_info args) {
 
   // TODO:
   // napi get uint64 argv[0] &deviceID
-  assert(napi_get_value_uint32(env, argv[1], &duration) == napi_ok);
-  assert(napi_get_value_uint32(env, argv[2], &power) == napi_ok);
+  assert(napi_get_value_int32(env, argv[1], &duration) == napi_ok);
+  assert(napi_get_value_int32(env, argv[2], &power) == napi_ok);
   assert(napi_get_value_int32(env, argv[3], &eventId) == napi_ok);
 
   printf("CPP : napi making devicevibrate event %d\n", eventId);
@@ -562,8 +562,8 @@ napi_value deviceVibrateF(napi_env env, napi_callback_info args) {
 
   // TODO:
   // napi get uint64 argv[0] &deviceID
-  assert(napi_get_value_uint32(env, argv[1], &duration) == napi_ok);
-  assert(napi_get_value_uint32(env, argv[2], &power) == napi_ok);
+  assert(napi_get_value_int32(env, argv[1], &duration) == napi_ok);
+  assert(napi_get_value_int32(env, argv[2], &power) == napi_ok);
   assert(napi_get_value_int32(env, argv[3], &eventId) == napi_ok);
 
   printf("CPP : napi making devicevibrate(F) event %d\n", eventId);
