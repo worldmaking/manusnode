@@ -21,13 +21,20 @@ receive packet -> process.buffer -> onSuccess, id = 1
 
 receive packet -> process.buffer -> onSourcesList, id = 2
     (handshake confirmed)
-    for each source: send getSourceInfo packet id = 4-7
+    for all desired sources: send one addStreams, id = 4
+    for each source: send getSourceInfo packet id = 5-8
+    for each source: send setStream[Data|Raw] packet id = 9-12  
+        5,6 & 9,10 - device | 7,8 & 11,12 - default filter
+    -> send startStreams packet id = 13
 
 receive packet -> process.buffer -> onDongleList, id = 3
     (handshake confirmed)
-    send listdevices packet id = 8
+    send listdevices packet id = 14
 
-receive packet -> process.buffer -> onSourceInfo, id = 4-7
+receive packet -> process.buffer -> onSuccess, id = 4
+    (handshake confirmed for addStreams
+
+receive packet -> process.buffer -> onSourceInfo, id = 5-8
     (handshake confirmed)
     
 receive packet -> process.buffer -> onDeviceList, id = 8
@@ -52,8 +59,6 @@ const HOST = '127.0.0.1'
 const PORT = 49010
 
 const client = new net.Socket()
-
-let nextEventID = 2
 
 const apollo_source_t = [
     "SOURCE_INVALID",
@@ -80,6 +85,7 @@ const apollo_laterality_t = {
     [-1]: "SIDE_LEFT",
     [1]: "SIDE_RIGHT"
 }
+let nextEventID = 2
 
 // TODO: clean up once working for full handling
 client.connect(PORT, HOST, function() {
@@ -252,8 +258,8 @@ client.connect(PORT, HOST, function() {
             let deviceID = new DataView(buf, 8).getBigUint64(0, true)
             let imus = new Float32Array(buf, 16, 2*4) //new DataView(buf, 16).getFloat32(0, true)
             let flex = new Float64Array(buf, 48, 5*2) //new DataView(buf, 20).getfloat64(0, true)
-            //let pinchProbability = new Float32Array(buf, 128, 4) // new DataView(buf, 128).getfloat32(0, true)
-            console.log(`NODE: onData, endpoint=${endpointID}, device=${deviceID}, imus=${imus[0]}, flex=${flex[0]}`)//, pinchProb=${pinchProbability}`)
+            let pinchProbability = new Float32Array(buf, 128, 1)[0] //new DataView(buf, 128).getfloat64(0, true)
+            console.log(`NODE: onData, endpoint=${endpointID}, device=${deviceID}, imus=${imus[0]}, flex=${flex[0]} pinchProb=${pinchProbability}`)
         },
         onQuery: function(eventID, arr) {
             //console.log("NODE: got onQuery with args", args.join(","))

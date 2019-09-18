@@ -968,7 +968,7 @@ void handleRawStream(void* callbackReturn, apollo_handle_t session, const Apollo
   void * abdata;
   assert(napi_create_arraybuffer(data->env, sizeof(ApolloRawData), &abdata, &argv[0]) == napi_ok);
   memcpy(abdata, rawData, sizeof(ApolloRawData));
-  printf("\nCPP : offsets %zu %zu %zu %zu %zu | sizeof last %zu\n", offsetof(ApolloRawData, endpointID), offsetof(ApolloRawData, deviceID), offsetof(ApolloRawData, imus), offsetof(ApolloRawData, flex), offsetof(ApolloRawData, pinchProbability), sizeof(double));
+  printf("\nCPP : offsets %zu %zu %zu %zu %zu | sizeof last %zu\n", offsetof(ApolloRawData, endpointID), offsetof(ApolloRawData, deviceID), offsetof(ApolloRawData, imus), offsetof(ApolloRawData, flex), offsetof(ApolloRawData, pinchProbability), sizeof(ApolloRawData));
   
   // pass this as an argument to the registered callback:
 	napi_value result;
