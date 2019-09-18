@@ -55,6 +55,32 @@ const client = new net.Socket()
 
 let nextEventID = 2
 
+const apollo_source_t = [
+    "SOURCE_INVALID",
+    "SOURCE_DEVICEDATA",
+    "SOURCE_FILTERED",
+    "SOURCE_FILTERED_DEFAULT"
+]
+
+const apollo_filter_t =[
+    "FILTER_NONE",
+    "FILTER_COORDINATESYSTEMCONVERSION",
+    "FILTER_MESHMAPPING",
+    "FILTER_GESTURE"
+]
+
+const apollo_gesture_t = [
+    "GESTURE_NONE",
+    "GESTURE_OPEN_HAND",
+    "GESTURE_FIST",
+    "GESTURE_INDEX_PINCH"
+]
+
+const apollo_laterality_t = {
+    [-1]: "SIDE_LEFT",
+    [1]: "SIDE_RIGHT"
+}
+
 // TODO: clean up once working for full handling
 client.connect(PORT, HOST, function() {
     console.log('NODE: CONNECTED TO: ' + HOST +':'+ PORT)
@@ -99,8 +125,8 @@ client.connect(PORT, HOST, function() {
                 console.log(`NODE: generate set stream type info for source ${sourceList_[i]}`)
                 let s = sourceList_[i]
                 //console.log(typeof s)
-                //client.write(Buffer.from(session.setStreamRaw(sourceList_, i, true, nextEventID++)))
-                client.write(Buffer.from(session.setStreamData(sourceList_, i, true, nextEventID++)))
+                client.write(Buffer.from(session.setStreamRaw(sourceList_, i, true, nextEventID++)))
+                //client.write(Buffer.from(session.setStreamData(sourceList_, i, true, nextEventID++)))
             }
 
             client.write(Buffer.from(session.startStreams(nextEventID++)))
@@ -130,10 +156,12 @@ client.connect(PORT, HOST, function() {
 
             let endpoint = new DataView(buf, 0).getBigUint64(0, true)
             let sourceType = new DataView(buf, 8).getUint32(0, true)
+            let sourceTypeName = apollo_source_t[sourceType] || "unknown"
             //let filterInfo = new DataView(buf, 12).get
             let deviceID = new DataView(buf, 30).getBigUint64(0, true)
             let side = new DataView(buf, 38).getInt32(0, true)
-            console.log(`NODE: onSourceInfo event=${eventID}, sourcetype=${sourceType} endpoint=${endpoint}, deviceID=${deviceID}, side=${side}`)
+            let sideName = apollo_laterality_t[side] || "N/A"
+            console.log(`NODE: onSourceInfo event=${eventID}, sourcetype=${sourceType}=${sourceTypeName} endpoint=${endpoint}, deviceID=${deviceID}, side=${side}=${sideName}`)
 
         },
         onDongleList: function(eventID, dongleList) {
@@ -184,7 +212,7 @@ client.connect(PORT, HOST, function() {
             let signalAttenuationDb = new DataView(buf, 25).getInt16(0, true)
             console.log(`NODE: onDeviceInfo event=${eventID}, deviceID=${deviceID} dongleID=${pairedDongleID}, hand=${hand}, deviceType=${devType}, bat%=${batteryPercent}, signal=${signalAttenuationDb}`)        
         },
-        onData: function(eventID, buf) {
+        onData: function(buf) {
             console.log("NODE: onData")
             /*
             struct ApolloJointData
@@ -195,18 +223,18 @@ client.connect(PORT, HOST, function() {
             20    float jointOrientations[5][5][4];   /// orientation for thumb[0], index[1], middle[2], ring[3], pinky[4] finger skeletal joints:
                                                       /// base[0], CMC/MCP[1], MCP/PIP[2], IP/DIP[3], tip[4] (named for thumb/other fingers)
                                                       /// as quaternions in the form of w[0], x[1], y[2], z[3]
-            }; 24
+            }; 120
             */
 
             // generateSetStreamData ?
             
             let endpointID = new DataView(buf, 0).getBigUint64(0, true)
             let deviceID = new DataView(buf, 8).getBigUint64(0, true)
-            //let wristOrientation = new DataView(buf, 16).getFloat32(0, true)
-            //let jointOrientations = new DataView(buf, 20).getFloat32(0, true)
-            console.log(`NODE: onData event=${eventID}, endpoint=${endpointID}, device=${deviceID},`)// wrist=${wristOrientation}, joint=${jointOrientations}`)
+            let wristOrientation = new Float32Array(buf, 16, 4)//new DataView(buf, 16).getFloat32(0, true)
+            let jointOrientations = new Float32Array(buf, 20, 5*5*4) //new DataView(buf, 20).getFloat32(0, true)
+            console.log(`NODE: onData, endpoint=${endpointID}, device=${deviceID}, wrist=${wristOrientation}, joint=${jointOrientations[0]}`)
         },
-        onRaw: function(eventID, buf) {
+        onRaw: function(buf) {
             console.log("NODE: onRaw")
             /*
             struct ApolloRawData
@@ -214,18 +242,18 @@ client.connect(PORT, HOST, function() {
             0     uint64_t endpointID;        /// source endpoint identifier
             8     uint64_t deviceID;          /// device from which original data has been sent
             16    float imus[2][4];           /// wrist[0] and thumb[1] IMU data quaternions in the form of w[0], x[1], y[2], z[3]
-            20    double flex[5][2];          /// thumb[0], index[1], middle[2], ring[3], pinky[4] finger normalised flex sensor values for MCP[0] and (P)IP[1] joints
-            28    float pinchProbability = 0; /// probability of a thumb-index pinch. Will only be non-zero if a pinch filter is active
-            }; 32
+            48    double flex[5][2];          /// thumb[0], index[1], middle[2], ring[3], pinky[4] finger normalised flex sensor values for MCP[0] and (P)IP[1] joints
+            128    float pinchProbability = 0; /// probability of a thumb-index pinch. Will only be non-zero if a pinch filter is active
+            }; 132
             */
 
             // generateSetStreaRaw ?
             let endpointID = new DataView(buf, 0).getBigUint64(0, true)
             let deviceID = new DataView(buf, 8).getBigUint64(0, true)
-            //let imus = new DataView(buf, 16).getFloat32(0, true)
-            //let flex = new DataView(buf, 20).getfloat64(0, true)
-            let pinchProbability = new DataView(buf, 28).getfloat32(0, true)
-            console.log(`NODE: onData event=${eventID}, endpoint=${endpointID}, device=${deviceID}, pinchProb=${pinchProbability}, imus=${imus}, flex=${flex}`)
+            let imus = new Float32Array(buf, 16, 2*4) //new DataView(buf, 16).getFloat32(0, true)
+            let flex = new Float64Array(buf, 48, 5*2) //new DataView(buf, 20).getfloat64(0, true)
+            //let pinchProbability = new Float32Array(buf, 128, 4) // new DataView(buf, 128).getfloat32(0, true)
+            console.log(`NODE: onData, endpoint=${endpointID}, device=${deviceID}, imus=${imus[0]}, flex=${flex[0]}`)//, pinchProb=${pinchProbability}`)
         },
         onQuery: function(eventID, arr) {
             //console.log("NODE: got onQuery with args", args.join(","))

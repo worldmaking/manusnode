@@ -920,21 +920,25 @@ void handleDataStream(void* callbackReturn, apollo_handle_t session, const Apoll
   // pull the callback function back out of the napi_ref:
 	napi_value callback; 
 	assert(napi_get_reference_value(data->env, data->onDataRef, &callback) == napi_ok);
+  napi_valuetype callbackType;
+  napi_typeof(data->env, callback, &callbackType);
+  assert(callbackType == napi_function);
 	
 	// call it: 
   int argc = 1;
   napi_value argv[1];
   void * abdata;
+  //printf("\nCPP TEST size %d ptr %p data %p", sizeof(ApolloJointData), &argv[0], jointData);   
   assert(napi_create_arraybuffer(data->env, sizeof(ApolloJointData), &abdata, &argv[0]) == napi_ok);
   memcpy(abdata, jointData, sizeof(ApolloJointData));
   printf("\nCPP : offsets %zu %zu %zu %zu | sizeof last %zu\n", offsetof(ApolloJointData, endpointID), offsetof(ApolloJointData, deviceID), offsetof(ApolloJointData, wristOrientation), offsetof(ApolloJointData, jointOrientations), sizeof(float));   
 
-  printf("CPP : joint data\n");// %p\n", jointData);
-  printf("CPP : handleDataStream complete\n");
-
   // pass this as an argument to the registered callback:
 	napi_value result;
 	assert(napi_call_function(data->env, sessionObject, callback, argc, argv, &result) == napi_ok);
+
+  printf("CPP : joint data %p\n", jointData);
+  printf("CPP : handleDataStream complete\n");
 
 }
 
@@ -954,6 +958,9 @@ void handleRawStream(void* callbackReturn, apollo_handle_t session, const Apollo
   // pull the callback function back out of the napi_ref:
 	napi_value callback; 
 	assert(napi_get_reference_value(data->env, data->onRawRef, &callback) == napi_ok);
+  napi_valuetype callbackType;
+  napi_typeof(data->env, callback, &callbackType);
+  assert(callbackType == napi_function);
 	
 	// call it: 
   int argc = 1;
@@ -961,7 +968,7 @@ void handleRawStream(void* callbackReturn, apollo_handle_t session, const Apollo
   void * abdata;
   assert(napi_create_arraybuffer(data->env, sizeof(ApolloRawData), &abdata, &argv[0]) == napi_ok);
   memcpy(abdata, rawData, sizeof(ApolloRawData));
-  printf("\nCPP : offsets %zu %zu %zu %zu %zu | sizeof last %zu\n", offsetof(ApolloRawData, endpointID), offsetof(ApolloRawData, deviceID), offsetof(ApolloRawData, imus[2][4]), offsetof(ApolloRawData, flex[5][2]), offsetof(ApolloRawData, pinchProbability), sizeof(float));
+  printf("\nCPP : offsets %zu %zu %zu %zu %zu | sizeof last %zu\n", offsetof(ApolloRawData, endpointID), offsetof(ApolloRawData, deviceID), offsetof(ApolloRawData, imus), offsetof(ApolloRawData, flex), offsetof(ApolloRawData, pinchProbability), sizeof(double));
   
   // pass this as an argument to the registered callback:
 	napi_value result;
