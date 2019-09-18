@@ -37,6 +37,13 @@ receive packet -> process.buffer -> onDeviceList, id = 8
 receive packet -> process.buffer -> onDeviceInfo, id = 9-10
     (handshake confirmed)
 
+//// generateAddStreams(list of sources, length of array, event)
+//// for each source -> generateSetStream[Raw|Data](source, dataEnabled[Y|N], event)
+//// generateStartStreams(event)   
+
+client.write startStreams -> OK but CPP fails @ line:  928+937 asserts for DATA || 962+968 asserts for RAW
+
+
 */
 
 const net = require('net')
@@ -68,7 +75,7 @@ client.connect(PORT, HOST, function() {
             console.log("NODE: got onSuccess with args", eventID, args.join(","))
         },
         onFail: function(eventID, ...args) {
-            console.log("NODE: got onFail with args", eventID, args.join(","))
+            console.log(`NODE: got onFail with args ${eventID} ${args.join(",")} \n`)//, eventID, args.join(","))
         }, 
         onSourcesList: function(eventID, sourceList) {
             console.log("NODE: onSourcesList with args", eventID, typeof sourceList, sourceList)
@@ -76,14 +83,27 @@ client.connect(PORT, HOST, function() {
 
             // generateListSources ?
             //TODO: need to store the source list to pass into other functions that expect it
-            // let streamType = true
-            for (let i=0; i<sourceList.length; i++) {
-                console.log(`NODE: generate get source info for source ${sourceList[i]}`)
-                let s = sourceList[i];
-                console.log(typeof s)
-                client.write(Buffer.from(session.getSourceInfo(sourceList, i, nextEventID++)))
-                //client.write(Buffer.from(session.setStreamRaw(sourceList, streamType, i, nextEventID++)))
+
+            let sourceList_ = sourceList //.slice(0,2)
+            console.log(`\nNODE: generate add streams for source ${sourceList_}`)
+            client.write(Buffer.from(session.addStreams(sourceList_, nextEventID++)))
+            console.log("\n")
+
+            for (let i=0; i<sourceList_.length; i++) {
+                console.log(`NODE: generate get source info for source ${sourceList_[i]}`)
+                let s = sourceList_[i]
+                //console.log(typeof s)
+                client.write(Buffer.from(session.getSourceInfo(sourceList_, i, nextEventID++)))
             }
+            for (let i=0; i<sourceList_.length; i++) {
+                console.log(`NODE: generate set stream type info for source ${sourceList_[i]}`)
+                let s = sourceList_[i]
+                //console.log(typeof s)
+                //client.write(Buffer.from(session.setStreamRaw(sourceList_, i, true, nextEventID++)))
+                client.write(Buffer.from(session.setStreamData(sourceList_, i, true, nextEventID++)))
+            }
+
+            client.write(Buffer.from(session.startStreams(nextEventID++)))
         },
         onSourceInfo: function(eventID, buf) {
             console.log("NODE: onSourceInfo")
@@ -98,17 +118,24 @@ client.connect(PORT, HOST, function() {
             }; 42
             */
            
+            /*
+            struct ApolloFilterChainInfo
+            {
+            0     uint8_t numFilters;         /// number of filters in this chain
+            1     apollo_filter_t* filters;   /// filter types as present in the chain, with index [0] the filter that directly follows the sources
+            5     uint8_t numSources;         /// number of inputs to this filter chain
+            6     uint64_t* sources;          /// source endpoint IDs of inputs to this filter chain
+            }; 14
+            */
+
             let endpoint = new DataView(buf, 0).getBigUint64(0, true)
             let sourceType = new DataView(buf, 8).getUint32(0, true)
+            //let filterInfo = new DataView(buf, 12).get
             let deviceID = new DataView(buf, 30).getBigUint64(0, true)
             let side = new DataView(buf, 38).getInt32(0, true)
             console.log(`NODE: onSourceInfo event=${eventID}, sourcetype=${sourceType} endpoint=${endpoint}, deviceID=${deviceID}, side=${side}`)
-            
-            //client.write(Buffer.from(session.setStreamRaw(endpoint, true, 0, nextEventID++)))
-            //client.write(Buffer.from(session.setStreamData(endpoint, true, nextEventID++)))
 
-            // generateGetSourceInfo ?
-        },        
+        },
         onDongleList: function(eventID, dongleList) {
             console.log("NODE: onDongleList with args", eventID, typeof dongleList, dongleList)
             console.log(`NODE: onDongleList: id=${eventID} arr=${dongleList}, len=${dongleList.length}`)
@@ -144,15 +171,18 @@ client.connect(PORT, HOST, function() {
             8     uint64_t pairedDongleID;        /// hardware identifier of the dongle that this device is paired to
             16    apollo_laterality_t hand;       /// info on whether this device is a left or a right glove
             20    apollo_dev_t devType;           /// the device's fabrication type
-                uint8_t batteryPercent;         /// battery charge in percent
-                int16_t signalAttenuationDb;    /// signal attenuation in dB
-            };
+            24    uint8_t batteryPercent;         /// battery charge in percent
+            25    int16_t signalAttenuationDb;    /// signal attenuation in dB
+            }; 27
            */
 
             let deviceID = new DataView(buf, 0).getBigUint64(0, true)
             let pairedDongleID = new DataView(buf, 8).getBigUint64(0, true)
             let hand = new DataView(buf, 16).getInt32(0, true)
-            console.log(`NODE: onDeviceInfo event=${eventID}, deviceID=${deviceID} dongleID=${pairedDongleID}, hand=${hand}`)        
+            let devType = new DataView(buf, 20).getInt32(0, true)
+            let batteryPercent = new DataView(buf, 24).getUint8(0, true)
+            let signalAttenuationDb = new DataView(buf, 25).getInt16(0, true)
+            console.log(`NODE: onDeviceInfo event=${eventID}, deviceID=${deviceID} dongleID=${pairedDongleID}, hand=${hand}, deviceType=${devType}, bat%=${batteryPercent}, signal=${signalAttenuationDb}`)        
         },
         onData: function(eventID, buf) {
             console.log("NODE: onData")
@@ -162,18 +192,19 @@ client.connect(PORT, HOST, function() {
             0     uint64_t endpointID;                /// source endpoint identifier
             8     uint64_t deviceID;                  /// device from which original data has been sent
             16    float wristOrientation[4];          /// quaternion representation of the wrist orientation (w[0], x[1], y[2]. z[3])
-                float jointOrientations[5][5][4];   /// orientation for thumb[0], index[1], middle[2], ring[3], pinky[4] finger skeletal joints:
-                                                    /// base[0], CMC/MCP[1], MCP/PIP[2], IP/DIP[3], tip[4] (named for thumb/other fingers)
-                                                    /// as quaternions in the form of w[0], x[1], y[2], z[3]
-            };
+            20    float jointOrientations[5][5][4];   /// orientation for thumb[0], index[1], middle[2], ring[3], pinky[4] finger skeletal joints:
+                                                      /// base[0], CMC/MCP[1], MCP/PIP[2], IP/DIP[3], tip[4] (named for thumb/other fingers)
+                                                      /// as quaternions in the form of w[0], x[1], y[2], z[3]
+            }; 24
             */
 
             // generateSetStreamData ?
             
-            let endpoint = new DataView(buf, 0).getBigUint64(0, true)
+            let endpointID = new DataView(buf, 0).getBigUint64(0, true)
             let deviceID = new DataView(buf, 8).getBigUint64(0, true)
-
-            console.log(`NODE: onData event=${eventID}, endpoint=${endpoint}, device=${deviceID}`)
+            //let wristOrientation = new DataView(buf, 16).getFloat32(0, true)
+            //let jointOrientations = new DataView(buf, 20).getFloat32(0, true)
+            console.log(`NODE: onData event=${eventID}, endpoint=${endpointID}, device=${deviceID},`)// wrist=${wristOrientation}, joint=${jointOrientations}`)
         },
         onRaw: function(eventID, buf) {
             console.log("NODE: onRaw")
@@ -183,16 +214,18 @@ client.connect(PORT, HOST, function() {
             0     uint64_t endpointID;        /// source endpoint identifier
             8     uint64_t deviceID;          /// device from which original data has been sent
             16    float imus[2][4];           /// wrist[0] and thumb[1] IMU data quaternions in the form of w[0], x[1], y[2], z[3]
-                double flex[5][2];          /// thumb[0], index[1], middle[2], ring[3], pinky[4] finger normalised flex sensor values for MCP[0] and (P)IP[1] joints
-                float pinchProbability = 0; /// probability of a thumb-index pinch. Will only be non-zero if a pinch filter is active
-            };
+            20    double flex[5][2];          /// thumb[0], index[1], middle[2], ring[3], pinky[4] finger normalised flex sensor values for MCP[0] and (P)IP[1] joints
+            28    float pinchProbability = 0; /// probability of a thumb-index pinch. Will only be non-zero if a pinch filter is active
+            }; 32
             */
 
             // generateSetStreaRaw ?
-            let endpoint = new DataView(buf, 0).getBigUint64(0, true)
+            let endpointID = new DataView(buf, 0).getBigUint64(0, true)
             let deviceID = new DataView(buf, 8).getBigUint64(0, true)
-
-            console.log(`NODE: onData event=${eventID}, endpoint=${endpoint}, device=${deviceID}`)
+            //let imus = new DataView(buf, 16).getFloat32(0, true)
+            //let flex = new DataView(buf, 20).getfloat64(0, true)
+            let pinchProbability = new DataView(buf, 28).getfloat32(0, true)
+            console.log(`NODE: onData event=${eventID}, endpoint=${endpointID}, device=${deviceID}, pinchProb=${pinchProbability}, imus=${imus}, flex=${flex}`)
         },
         onQuery: function(eventID, arr) {
             //console.log("NODE: got onQuery with args", args.join(","))
@@ -207,13 +240,14 @@ client.connect(PORT, HOST, function() {
         // packetneeded = session.process(data.buffer)
         // process a duplicate packet:
         // let pkt = data.buffer.slice(0)
-        
+
         let pkt = data.buffer
         session.process(pkt)
         console.log('NODE: after process data.buffer')
     })
     
     client.on('close', function() {
+        session.stopStreams(nextEventID++)
         session.close()
         console.log('NODE: session.close | Connection closed')
     })
