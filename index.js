@@ -25,31 +25,34 @@ receive packet -> process.buffer -> onSourcesList, id = 2
     for each source: send getSourceInfo packet id = 5-8
     for each source: send setStream[Data|Raw] packet id = 9-12  
         5,6 & 9,10 - device | 7,8 & 11,12 - default filter
-    -> send startStreams packet id = 13
 
 receive packet -> process.buffer -> onDongleList, id = 3
     (handshake confirmed)
     send listdevices packet id = 14
 
 receive packet -> process.buffer -> onSuccess, id = 4
-    (handshake confirmed for addStreams
+    (handshake confirmed for addStreams - multiple successes)
 
 receive packet -> process.buffer -> onSourceInfo, id = 5-8
-    (handshake confirmed)
+    (handshake confirmed - success for each source)
+
+receive packet -> process.buffer -> setStream, id = 9-12
+    (handshake confirmed - success for each source stream set)
+
+receive packet -> process.buffer -> startStreams, id = 13
+    (handshake confirmed - success)
     
-receive packet -> process.buffer -> onDeviceList, id = 8
+receive packet -> process.buffer -> onDeviceList, id = 14
     (handshake confirmed)
-    for each device: send getDeviceInfo packet id = 9-10
+    for each device: send getDeviceInfo packet id = 14,15
 
-receive packet -> process.buffer -> onDeviceInfo, id = 9-10
+receive packet -> process.buffer -> onDeviceInfo, id = 14,15
     (handshake confirmed)
+    -> send startStreams packet id = 16
 
-//// generateAddStreams(list of sources, length of array, event)
-//// for each source -> generateSetStream[Raw|Data](source, dataEnabled[Y|N], event)
-//// generateStartStreams(event)   
-
-client.write startStreams -> OK but CPP fails @ line:  928+937 asserts for DATA || 962+968 asserts for RAW
-
+receive packet -> process.buffer -> startStreams, id = 16
+    (handshake confirmed)
+    -> continuous streaming
 
 */
 
@@ -135,7 +138,7 @@ client.connect(PORT, HOST, function() {
                 //client.write(Buffer.from(session.setStreamData(sourceList_, i, true, nextEventID++)))
             }
 
-            client.write(Buffer.from(session.startStreams(nextEventID++)))
+            //client.write(Buffer.from(session.startStreams(nextEventID++)))
         },
         onSourceInfo: function(eventID, buf) {
             console.log("NODE: onSourceInfo")
@@ -195,6 +198,7 @@ client.connect(PORT, HOST, function() {
                 console.log(typeof d)
                 client.write(Buffer.from(session.getDeviceInfo(deviceList, i, nextEventID++)))
             }
+            client.write(Buffer.from(session.startStreams(nextEventID++)))
         },
         onDeviceInfo: function(eventID, buf) {
             console.log("NODE: onDeviceInfo")
