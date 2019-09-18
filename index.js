@@ -90,6 +90,12 @@ const apollo_laterality_t = {
 }
 let nextEventID = 2
 
+let state = {
+
+}
+
+exports.state = state;
+
 // TODO: clean up once working for full handling
 client.connect(PORT, HOST, function() {
     console.log('NODE: CONNECTED TO: ' + HOST +':'+ PORT)
@@ -134,8 +140,8 @@ client.connect(PORT, HOST, function() {
                 console.log(`NODE: generate set stream type info for source ${sourceList_[i]}`)
                 let s = sourceList_[i]
                 //console.log(typeof s)
-                client.write(Buffer.from(session.setStreamRaw(sourceList_, i, true, nextEventID++)))
-                //client.write(Buffer.from(session.setStreamData(sourceList_, i, true, nextEventID++)))
+                //client.write(Buffer.from(session.setStreamRaw(sourceList_, i, true, nextEventID++)))
+                client.write(Buffer.from(session.setStreamData(sourceList_, i, true, nextEventID++)))
             }
 
             //client.write(Buffer.from(session.startStreams(nextEventID++)))
@@ -162,15 +168,20 @@ client.connect(PORT, HOST, function() {
             6     uint64_t* sources;          /// source endpoint IDs of inputs to this filter chain
             }; 14
             */
+            let endpointID = new DataView(buf, 0).getBigUint64(0, true).toString()
+            let hand = state[endpointID];
+            if (!hand) {
+                hand = {}
+                state[endpointID] = hand
+            }
 
-            let endpoint = new DataView(buf, 0).getBigUint64(0, true)
-            let sourceType = new DataView(buf, 8).getUint32(0, true)
-            let sourceTypeName = apollo_source_t[sourceType] || "unknown"
+            hand.sourceType = new DataView(buf, 8).getUint32(0, true)
+            hand.sourceTypeName = apollo_source_t[hand.sourceType] || "unknown"
             //let filterInfo = new DataView(buf, 12).get
-            let deviceID = new DataView(buf, 30).getBigUint64(0, true)
-            let side = new DataView(buf, 38).getInt32(0, true)
-            let sideName = apollo_laterality_t[side] || "N/A"
-            console.log(`NODE: onSourceInfo event=${eventID}, sourcetype=${sourceType}=${sourceTypeName} endpoint=${endpoint}, deviceID=${deviceID}, side=${side}=${sideName}`)
+            hand.deviceID = new DataView(buf, 30).getBigUint64(0, true).toString()
+            hand.side = new DataView(buf, 38).getInt32(0, true)
+            hand.sideName = apollo_laterality_t[hand.side] || "N/A"
+           // console.log(`NODE: onSourceInfo event=${eventID}, sourcetype=${sourceType}=${sourceTypeName} endpoint=${endpoint}, deviceID=${deviceID}, side=${side}=${sideName}`)
 
         },
         onDongleList: function(eventID, dongleList) {
@@ -223,7 +234,7 @@ client.connect(PORT, HOST, function() {
             console.log(`NODE: onDeviceInfo event=${eventID}, deviceID=${deviceID} dongleID=${pairedDongleID}, hand=${hand}, deviceType=${devType}, bat%=${batteryPercent}, signal=${signalAttenuationDb}`)        
         },
         onData: function(buf) {
-            console.log("NODE: onData")
+            //console.log("NODE: onData")
             /*
             struct ApolloJointData
             {
@@ -238,14 +249,22 @@ client.connect(PORT, HOST, function() {
 
             // generateSetStreamData ?
             
-            let endpointID = new DataView(buf, 0).getBigUint64(0, true)
-            let deviceID = new DataView(buf, 8).getBigUint64(0, true)
-            let wristOrientation = new Float32Array(buf, 16, 4)//new DataView(buf, 16).getFloat32(0, true)
-            let jointOrientations = new Float32Array(buf, 20, 5*5*4) //new DataView(buf, 20).getFloat32(0, true)
-            console.log(`NODE: onData, endpoint=${endpointID}, device=${deviceID}, wrist=${wristOrientation}, joint=${jointOrientations[0]}`)
+            let endpointID = new DataView(buf, 0).getBigUint64(0, true).toString()
+
+            let hand = state[endpointID];
+            if (!hand) {
+                hand = {}
+                state[endpointID] = hand
+            }
+            hand.deviceID = new DataView(buf, 8).getBigUint64(0, true).toString()
+            hand.wristOrientation = new Float32Array(buf, 16, 4)//new DataView(buf, 16).getFloat32(0, true)
+            hand.jointOrientations = new Float32Array(buf, 20, 5*5*4) //new DataView(buf, 20).getFloat32(0, true)
+            //console.log(`NODE: onData, endpoint=${endpointID}, device=${deviceID}, wrist=${wristOrientation}, joint=${jointOrientations[0]}`)
+            
+            
         },
         onRaw: function(buf) {
-            console.log("NODE: onRaw")
+            //console.log("NODE: onRaw")
             /*
             struct ApolloRawData
             {
@@ -263,7 +282,7 @@ client.connect(PORT, HOST, function() {
             let imus = new Float32Array(buf, 16, 2*4) //new DataView(buf, 16).getFloat32(0, true)
             let flex = new Float64Array(buf, 48, 5*2) //new DataView(buf, 20).getfloat64(0, true)
             let pinchProbability = new Float32Array(buf, 128, 1)[0] //new DataView(buf, 128).getfloat64(0, true)
-            console.log(`NODE: onData, endpoint=${endpointID}, device=${deviceID}, imus=${imus[0]}, flex=${flex[0]} pinchProb=${pinchProbability}`)
+            //console.log(`NODE: onData, endpoint=${endpointID}, device=${deviceID}, imus=${imus[0]}, flex=${flex[0]} pinchProb=${pinchProbability}`)
         },
         onQuery: function(eventID, arr) {
             //console.log("NODE: got onQuery with args", args.join(","))
@@ -273,7 +292,7 @@ client.connect(PORT, HOST, function() {
     })
 
     client.on('data', function(data) {
-        console.log('NODE: on "DATA":', typeof data, data.byteLength, data.byteOffset, data)
+        //console.log('NODE: on "DATA":', typeof data, data.byteLength, data.byteOffset, data)
         // invoke the session's handlers for this packet:
         // packetneeded = session.process(data.buffer)
         // process a duplicate packet:
@@ -281,7 +300,7 @@ client.connect(PORT, HOST, function() {
 
         let pkt = data.buffer
         session.process(pkt)
-        console.log('NODE: after process data.buffer')
+       // console.log('NODE: after process data.buffer')
     })
     
     client.on('close', function() {

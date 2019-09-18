@@ -1,6 +1,7 @@
 
 
 let log = document.getElementById("log");
+let state = document.getElementById("state")
 let msgs = [];
 
 function write(...args) {
@@ -54,11 +55,12 @@ function connect_to_server(opt, log) {
 					obj = JSON.parse(msg);
 				} catch(e) {}
 				if (obj.cmd == "newData") {
-					//...
+					state.innerText = JSON.stringify(obj.state, null, "  ");
+				} else {
+					//if (onmessage) onmessage(msg);
+					//else 
+					log("ws received", msg);
 				}
-				//if (onmessage) onmessage(msg);
-				//else 
-				log("ws received", msg);
 			} 
 		}
 		self.socket.onclose = function(e) {

@@ -11,6 +11,7 @@ const express = require('express');
 const WebSocket = require('ws');
 const { vec2, vec3, vec4, quat, mat3, mat4 } = require("gl-matrix");
 
+const manus = require("./index.js")
 
 const project_path = process.cwd();
 const server_path = __dirname;
@@ -80,7 +81,7 @@ wss.on('connection', function(ws, req) {
 		} else {
 			if (msg == "getData") {
 				// reply:
-				ws.send(JSON.stringify({ cmd:"newData" }))
+				ws.send(JSON.stringify({ cmd:"newData", state: manus.state }))
 			} else {
 				console.log("received message from client:", id, msg);
 			}
