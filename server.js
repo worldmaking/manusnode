@@ -69,16 +69,21 @@ wss.on('connection', function(ws, req) {
 	});
 	
 	// respond to any messages from the client:
-	ws.on('message', function(e) {
-		if (e instanceof Buffer) {
+	ws.on('message', function(msg) {
+		if (msg instanceof Buffer) {
 			// get an arraybuffer from the message:
-			const ab = e.buffer.slice(e.byteOffset,e.byteOffset+e.byteLength);
+			const ab = msg.buffer.slice(msg.byteOffset,msg.byteOffset+msg.byteLength);
 			console.log("received arraybuffer", ab);
 			// as float32s:
 			//console.log(new Float32Array(ab));
 
 		} else {
-			console.log("received message from client:", id, e)
+			if (msg == "getData") {
+				// reply:
+				ws.send(JSON.stringify({ cmd:"newData" }))
+			} else {
+				console.log("received message from client:", id, msg);
+			}
 		}
 	});
 	
