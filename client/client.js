@@ -2,6 +2,7 @@ let log = document.getElementById("log");
 let state_div = document.getElementById("state")
 let msgs = [];
 
+
 // wrist
 function threeQuatFromManusQuat(q, arr, offset=0) {
 	//q.fromArray(hand.wristOrientation);
@@ -29,65 +30,68 @@ var camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHe
 
 var renderer = new THREE.WebGLRenderer();
 renderer.setSize( window.innerWidth, window.innerHeight );
-document.body.appendChild( renderer.domElement );
+//document.body.appendChild( renderer.domElement );
+document.body.appendChild( WEBVR.createButton( renderer ) );
+renderer.vr.enabled = true;
 
+//function init() {
+	let handMaterial = new THREE.MeshStandardMaterial( { color: 0x883322 } );
 
-let handMaterial = new THREE.MeshStandardMaterial( { color: 0x883322 } );
+	var wrist = new THREE.Mesh( new THREE.TorusGeometry( 3, 1, 16, 100 ), handMaterial );
+	scene.add( wrist );
+	wrist.add(new THREE.AxesHelper( 5 ));
 
-var wrist = new THREE.Mesh( new THREE.TorusGeometry( 3, 1, 16, 100 ), handMaterial );
-scene.add( wrist );
-wrist.add(new THREE.AxesHelper( 5 ));
+	let palm = new THREE.Mesh( new THREE.BoxGeometry( 6, 1, 7 ), handMaterial );
+	palm.position.z = -3.5;
+	wrist.add(palm);
 
-let palm = new THREE.Mesh( new THREE.BoxGeometry( 6, 1, 7 ), handMaterial );
-palm.position.z = -3.5;
-wrist.add(palm);
+	var cone = new THREE.Mesh( new THREE.ConeGeometry( 1, 2, 32 ), new THREE.MeshStandardMaterial( { color: 0x00ff00 } ) );
+	palm.add( cone );
 
-var cone = new THREE.Mesh( new THREE.ConeGeometry( 1, 2, 32 ), new THREE.MeshStandardMaterial( { color: 0x00ff00 } ) );
-palm.add( cone );
+	palm.add(new THREE.AxesHelper( 5 ));
 
-palm.add(new THREE.AxesHelper( 5 ));
+	let joints = []
 
-let joints = []
+	// fingers:
+	for (let i=0; i<5; i++) {
+		// joints:
+		let parent = wrist;
+		joints[i] = []
+		for (let j=0; j<3; j++) {
 
-// fingers:
-for (let i=0; i<5; i++) {
-	// joints:
-	let parent = wrist;
-	joints[i] = []
-	for (let j=0; j<3; j++) {
-
-		let joint = new THREE.Mesh( new THREE.BoxGeometry( 1, 1, 1 ), handMaterial );
-		if (i==0) {
-			switch(j) {
-				case 0: joint.position.z = -2; joint.position.x = 4; break;
-				case 1: joint.position.z = -2.5; break;
-				case 2: joint.position.z = -2; break;
+			let joint = new THREE.Mesh( new THREE.BoxGeometry( 1, 1, 1 ), handMaterial );
+			if (i==0) {
+				switch(j) {
+					case 0: joint.position.z = -2; joint.position.x = 4; break;
+					case 1: joint.position.z = -2.5; break;
+					case 2: joint.position.z = -2; break;
+				}
+			} else {
+				switch(j) {
+					case 0: joint.position.z = -7; joint.position.x = (i-2.5)*-1.5; break;
+					case 1: joint.position.z = -2.5; break;
+					case 2: joint.position.z = -2; break;
+				}
 			}
-		} else {
-			switch(j) {
-				case 0: joint.position.z = -7; joint.position.x = (i-2.5)*-1.5; break;
-				case 1: joint.position.z = -2.5; break;
-				case 2: joint.position.z = -2; break;
-			}
+			parent.add(joint);
+			parent = joint;
+			joints[i][j] = joint;
+			
+			joint.add(new THREE.AxesHelper( 2 ));
 		}
-		parent.add(joint);
-		parent = joint;
-		joints[i][j] = joint;
-		
-		joint.add(new THREE.AxesHelper( 2 ));
 	}
-}
 
-// White directional light at half intensity shining from the top.
-var directionalLight = new THREE.DirectionalLight( 0xffffff, 0.5 );
-scene.add( directionalLight );
-var light = new THREE.AmbientLight( 0x404040 ); // soft white light
-scene.add( light );
+	// White directional light at half intensity shining from the top.
+	var directionalLight = new THREE.DirectionalLight( 0xffffff, 0.5 );
+	scene.add( directionalLight );
+	var light = new THREE.AmbientLight( 0x404040 ); // soft white light
+	scene.add( light );
 
-wrist.position.x = -8;
-wrist.position.y = -8;
-wrist.position.z = -20;
+	wrist.position.x = -8;
+	wrist.position.y = -8;
+	wrist.position.z = -20;
 
+//}
 
 function write(...args) {
 	if(msgs.length > 15){
@@ -103,7 +107,6 @@ function write(...args) {
 	log.innerText +=  "Log: \n " + fMsg;
 	console.log(msg);
 }
-
 
 function connect_to_server(opt, log) {
 	let self = {
@@ -182,16 +185,32 @@ try {
 	console.error(e);
 }
 
-function update() {
+//init();
+animate();
 
-	requestAnimationFrame(update);
+function onWindowResize() {
+
+	camera.aspect = window.innerWidth / window.innerHeight;
+	camera.updateProjectionMatrix();
+  
+	renderer.setSize( window.innerWidth, window.innerHeight );
+  
+}
+
+function animate() {
+  
+	renderer.setAnimationLoop( render );
+  
+}
+
+function render() {
+
+	//requestAnimationFrame(update);
 	try {
 		sock.send("getData");
 	} catch(e) {
 		write(e)
 	}
-
-
 
 	renderer.render( scene, camera );
 
@@ -225,4 +244,5 @@ function update() {
 
 }
 
-update();
+
+//render();
