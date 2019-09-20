@@ -91,7 +91,7 @@ const apollo_laterality_t = {
 let nextEventID = 2
 
 let state = {
-
+    devices: {},
 }
 
 exports.state = state;
@@ -169,10 +169,10 @@ client.connect(PORT, HOST, function() {
             }; 14
             */
             let endpointID = new DataView(buf, 0).getBigUint64(0, true).toString()
-            let hand = state[endpointID];
+            let hand = state.devices[endpointID];
             if (!hand) {
                 hand = {}
-                state[endpointID] = hand
+                state.devices[endpointID] = hand
             }
 
             hand.sourceType = new DataView(buf, 8).getUint32(0, true)
@@ -241,7 +241,7 @@ client.connect(PORT, HOST, function() {
             0     uint64_t endpointID;                /// source endpoint identifier
             8     uint64_t deviceID;                  /// device from which original data has been sent
             16    float wristOrientation[4];          /// quaternion representation of the wrist orientation (w[0], x[1], y[2]. z[3])
-            20    float jointOrientations[5][5][4];   /// orientation for thumb[0], index[1], middle[2], ring[3], pinky[4] finger skeletal joints:
+            32    float jointOrientations[5][5][4];   /// orientation for thumb[0], index[1], middle[2], ring[3], pinky[4] finger skeletal joints:
                                                       /// base[0], CMC/MCP[1], MCP/PIP[2], IP/DIP[3], tip[4] (named for thumb/other fingers)
                                                       /// as quaternions in the form of w[0], x[1], y[2], z[3]
             }; 120
@@ -251,14 +251,14 @@ client.connect(PORT, HOST, function() {
             
             let endpointID = new DataView(buf, 0).getBigUint64(0, true).toString()
 
-            let hand = state[endpointID];
+            let hand = state.devices[endpointID];
             if (!hand) {
                 hand = {}
-                state[endpointID] = hand
+                state.devices[endpointID] = hand
             }
             hand.deviceID = new DataView(buf, 8).getBigUint64(0, true).toString()
             hand.wristOrientation = new Float32Array(buf, 16, 4)//new DataView(buf, 16).getFloat32(0, true)
-            hand.jointOrientations = new Float32Array(buf, 20, 5*5*4) //new DataView(buf, 20).getFloat32(0, true)
+            hand.jointOrientations = new Float32Array(buf, 32, 5*5*4) //new DataView(buf, 20).getFloat32(0, true)
             //console.log(`NODE: onData, endpoint=${endpointID}, device=${deviceID}, wrist=${wristOrientation}, joint=${jointOrientations[0]}`)
             
             

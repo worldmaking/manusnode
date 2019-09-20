@@ -931,7 +931,9 @@ void handleDataStream(void* callbackReturn, apollo_handle_t session, const Apoll
   ////printf("\nCPP TEST size %d ptr %p data %p", sizeof(ApolloJointData), &argv[0], jointData);   
   assert(napi_create_arraybuffer(data->env, sizeof(ApolloJointData), &abdata, &argv[0]) == napi_ok);
   memcpy(abdata, jointData, sizeof(ApolloJointData));
-  //printf("\nCPP : offsets %zu %zu %zu %zu | sizeof last %zu\n", offsetof(ApolloJointData, endpointID), offsetof(ApolloJointData, deviceID), offsetof(ApolloJointData, wristOrientation), offsetof(ApolloJointData, jointOrientations), sizeof(float));   
+  //
+  
+ // printf("\nCPP : offsets %zu %zu %zu %zu | sizeof last %zu\n", offsetof(ApolloJointData, endpointID), offsetof(ApolloJointData, deviceID), offsetof(ApolloJointData, wristOrientation), offsetof(ApolloJointData, jointOrientations), sizeof(float));   
 
   // pass this as an argument to the registered callback:
 	napi_value result;
