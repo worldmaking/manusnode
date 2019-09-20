@@ -99,6 +99,8 @@ wss.on('connection', function(ws, req) {
 });
 
 server.listen(8080, function() {
+	console.log(`\n\n\n****************`);
+	console.log(`****************`);
 	console.log(`server listening`);
-	console.log(`client view on http://localhost:${server.address().port}/index.html`);
+	console.log(`client view on http://localhost:${server.address().port}/index.html\n\n`);
 });
