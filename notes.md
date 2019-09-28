@@ -17,3 +17,5 @@ some packets sent by clients may result in the server replying with more than on
 
 TODO: simplify interface by returning Buffer rather than arraybuffer from the generate() methods?
 
+
+TODO: (?) handle 'error' thrown when server starts before apollo/gloves on and connected

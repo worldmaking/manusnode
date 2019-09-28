@@ -2,96 +2,92 @@ let log = document.getElementById("log");
 let state_div = document.getElementById("state")
 let msgs = [];
 
-
 // wrist
 function threeQuatFromManusQuat(q, arr, offset=0) {
 	//q.fromArray(hand.wristOrientation);
 	//q.set(arr[1], arr[2], arr[3], arr[0]);
 	//Manus: [w] 			[x]v 			[y] 			[z]<
 	//Three: [x]> 			[y] 			[z]v 			[w]
-	q.set(-arr[offset+3], -arr[offset+2], -arr[offset+1], arr[offset+0])
+	q.set(-arr[offset+3], arr[offset+2], -arr[offset+1], arr[offset+0])//.normalize();
 	//q.set(arr[offset+3], arr[offset+2], arr[offset+1], arr[offset+0])
 }
 
 // joints
 function threeQuatFromManusQuat2(q, arr, offset=0) {
-	//q.fromArray(hand.wristOrientation);
-	//q.set(arr[1], arr[2], arr[3], arr[0]);
-	//Manus: [w] 			[x]v 			[y] 			[z]<
-	//Three: [x]> 			[y] 			[z]v 			[w]
 	q.set(arr[offset+3], arr[offset+2], arr[offset+1], arr[offset+0])
-	//q.set(arr[offset+3], arr[offset+2], arr[offset+1], arr[offset+0])
 }
 
 let state = null
 
 var scene = new THREE.Scene();
-var camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+let qscene = scene.add(new THREE.AxesHelper( 0.2 ));
+
+var camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.04, 10 );
+camera.position.set(0, 1.6, 2);
 
 var renderer = new THREE.WebGLRenderer();
 renderer.setSize( window.innerWidth, window.innerHeight );
-//document.body.appendChild( renderer.domElement );
 document.body.appendChild( WEBVR.createButton( renderer ) );
 renderer.vr.enabled = true;
 
-//function init() {
-	let handMaterial = new THREE.MeshStandardMaterial( { color: 0x883322 } );
+let handMaterial = new THREE.MeshStandardMaterial( { color: 0x883322 } );
 
-	var wrist = new THREE.Mesh( new THREE.TorusGeometry( 3, 1, 16, 100 ), handMaterial );
-	scene.add( wrist );
-	wrist.add(new THREE.AxesHelper( 5 ));
+let wrist = new THREE.Mesh( new THREE.TorusGeometry( 0.03, 0.01, 16, 100 ), handMaterial );
+scene.add( wrist );
+wrist.add(new THREE.AxesHelper( 0.05 ));
 
-	let palm = new THREE.Mesh( new THREE.BoxGeometry( 6, 1, 7 ), handMaterial );
-	palm.position.z = -3.5;
-	wrist.add(palm);
+wrist.position.x = -0.25;//-8;
+wrist.position.y = 0.75;// -8
+wrist.position.z = -0.1;//-20;
 
-	var cone = new THREE.Mesh( new THREE.ConeGeometry( 1, 2, 32 ), new THREE.MeshStandardMaterial( { color: 0x00ff00 } ) );
-	palm.add( cone );
+let palm = new THREE.Mesh( new THREE.BoxGeometry( 0.06, 0.01, 0.07 ), handMaterial );
+palm.position.z = -.035;
+wrist.add(palm);
 
-	palm.add(new THREE.AxesHelper( 5 ));
+var cone = new THREE.Mesh( new THREE.ConeGeometry( 0.01, 0.02, 32 ), new THREE.MeshStandardMaterial( { color: 0x00ff00 } ) );
+palm.add( cone );
 
-	let joints = []
+palm.add(new THREE.AxesHelper( 0.05 ));
 
-	// fingers:
-	for (let i=0; i<5; i++) {
-		// joints:
-		let parent = wrist;
-		joints[i] = []
-		for (let j=0; j<3; j++) {
+let joints = [];
 
-			let joint = new THREE.Mesh( new THREE.BoxGeometry( 1, 1, 1 ), handMaterial );
-			if (i==0) {
-				switch(j) {
-					case 0: joint.position.z = -2; joint.position.x = 4; break;
-					case 1: joint.position.z = -2.5; break;
-					case 2: joint.position.z = -2; break;
-				}
-			} else {
-				switch(j) {
-					case 0: joint.position.z = -7; joint.position.x = (i-2.5)*-1.5; break;
-					case 1: joint.position.z = -2.5; break;
-					case 2: joint.position.z = -2; break;
-				}
+// fingers:
+for (let i=0; i<5; i++) {
+	// joints:
+	let parent = wrist;
+	joints[i] = []
+	for (let j=0; j<3; j++) {
+
+		let joint = new THREE.Mesh( new THREE.BoxGeometry( 0.01, 0.01, 0.01 ), handMaterial );
+		if (i==0) {
+			// thumb
+			switch(j) {
+				case 0: joint.position.z = -0.02; joint.position.x = 0.04; break;
+				case 1: joint.position.z = -0.025; break;
+				case 2: joint.position.z = -0.02; break;
 			}
-			parent.add(joint);
-			parent = joint;
-			joints[i][j] = joint;
-			
-			joint.add(new THREE.AxesHelper( 2 ));
+		} else {
+			// fingers
+			switch(j) {
+				case 0: joint.position.z = -0.07; joint.position.x = (i-2.5)*-0.015; break;
+				case 1: joint.position.z = -0.025; break;
+				case 2: joint.position.z = -0.02; break;
+			}
 		}
+		parent.add(joint);
+		parent = joint;
+		joints[i][j] = joint;
+		
+		joint.add(new THREE.AxesHelper( 0.02 ));
 	}
+}
 
-	// White directional light at half intensity shining from the top.
-	var directionalLight = new THREE.DirectionalLight( 0xffffff, 0.5 );
-	scene.add( directionalLight );
-	var light = new THREE.AmbientLight( 0x404040 ); // soft white light
-	scene.add( light );
 
-	wrist.position.x = -8;
-	wrist.position.y = -8;
-	wrist.position.z = -20;
-
-//}
+// White directional light at half intensity shining from the top.
+var directionalLight = new THREE.DirectionalLight( 0xffffff, 0.5 );
+scene.add( directionalLight );
+var light = new THREE.AmbientLight( 0x404040 ); // soft white light
+scene.add( light );
 
 function write(...args) {
 	if(msgs.length > 15){
@@ -185,7 +181,11 @@ try {
 	console.error(e);
 }
 
-//init();
+let line = new THREE.Line( new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1) ]) );
+line.name = "line";
+line.scale.z = 3;
+palm.add(line.clone());
+
 animate();
 
 function onWindowResize() {
@@ -205,34 +205,35 @@ function animate() {
 
 function render() {
 
-	//requestAnimationFrame(update);
 	try {
 		sock.send("getData");
 	} catch(e) {
 		write(e)
 	}
 
-	renderer.render( scene, camera );
+		if (!state) return;
 
-	if (!state) return;
-
+	// endpointID
 	// [0] SOURCE_FILTERED_DEFAULT - LH
-	// [1] SOURCE_DEVIDEDATA - LH
+	// [1] SOURCE_DEVICEDATA - LH
 	// [2] SOURCE_FILTERED_DEFAULT - RH
 	// [3] SOURCE_DEVICEDATA - RH
-	let deviceID = Object.keys(state.devices).sort()[0]
+	let deviceID = Object.keys(state.devices).sort()[3]
 	let hand = state.devices[deviceID];
 
 	state_div.innerText = JSON.stringify(hand, null, "  ");
+	
+	/// wristOrientation[4];
+	/// quaternion representation of the wrist orientation (w[0], x[1], y[2], z[3])
 
-	///float jointOrientations[5][5][4]; 
-	///orientation for thumb[0], index[1], middle[2], ring[3], pinky[4] finger skeletal joints:
+	/// float jointOrientations[5][5][4]; 
+	/// orientation for thumb[0], index[1], middle[2], ring[3], pinky[4] finger skeletal joints:
 	/// base[0], CMC/MCP[1], MCP/PIP[2], IP/DIP[3], tip[4] (named for thumb/other fingers)
 	/// as quaternions in the form of w[0], x[1], y[2], z[3]
 
 	// i.e., every 20 numbers represents one finger
 	// within that there are 5 quaternions for the various joints from base to tip
-
+	
 	threeQuatFromManusQuat(wrist.quaternion, hand.wristOrientation);
 
 	for (let i=0; i<5; i++) {
@@ -241,8 +242,5 @@ function render() {
 		}
 	}
 
-
+	renderer.render( scene, camera );
 }
-
-
-//render();
