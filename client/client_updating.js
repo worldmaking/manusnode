@@ -36,7 +36,7 @@ let leftWrist,
     rightJoints = [];
 
 let geometries = [
-  new THREE.ConeGeometry( 0.01, 0.02, 32 ), // [0] cone
+  new THREE.ConeGeometry( 0.01, 0.02, 32 ), // [0] boids
   new THREE.TorusGeometry( 0.03, 0.01, 16, 100 ), // [1] wrist
   new THREE.BoxGeometry( 0.06, 0.01, 0.07 ), // [2] palm
   new THREE.BoxGeometry( 0.01, 0.01, 0.01 ), // [3] joints
@@ -48,9 +48,9 @@ let geometries = [
 ];
 
 let materials = [
-  // [0] cone
-  new THREE.MeshStandardMaterial( { 
-    color: 0x00ff00 
+  // [0] boids
+  new THREE.MeshLambertMaterial( {
+    color: new THREE.Color().setHSL( Math.random() * 0.7, 0.75, 0.75 )
   } ),
   // [1] wrist, palm, joints
   new THREE.MeshStandardMaterial( {
@@ -82,29 +82,35 @@ let state = null;
 
 let sock;
 
+
+//  // 3D BOIDS //  //
+let radius = 0.02;
+let clock = new THREE.Clock();
+let boids = [];
+
 //  // UPDATE WORLD FUNCTIONS //  //
 
 function threeQuatFromManusQuat( q, arr, offset=0 ) {
   //** swap quaternion differences */
 	//** Manus: [w] 			[x]v 			[y] 			[z]< */
 	//** Three: [x]> 			[y] 			[z]v 			[w] */
-  q.set( -arr[ offset + 3 ], -arr[ offset + 2 ], -arr[ offset + 1 ], arr[ offset + 0 ] )
+  q.set( -arr[ offset + 3 ], -arr[ offset + 2 ], -arr[ offset + 1 ], arr[ offset + 0 ] );
 }
 
 function threeQuatFromManusQuat2(q, arr, offset=0) {
-	q.set( arr[ offset + 3 ], arr[ offset + 2 ], arr[ offset + 1 ], arr[ offset + 0 ] )
+	q.set( arr[ offset + 3 ], arr[ offset + 2 ], arr[ offset + 1 ], arr[ offset + 0 ] );
 }
 
 function threeQuatFromManusQuat3(q, arr, offset=0) {
-	q.set( -arr[ offset + 3 ], -arr[ offset + 2 ], arr[ offset + 1 ], -arr[ offset + 0 ] )
+	q.set( -arr[ offset + 3 ], -arr[ offset + 2 ], arr[ offset + 1 ], -arr[ offset + 0 ] );
 }
 
 function threeQuatFromManusQuat4(q, arr, offset=0) {
-	q.set( -arr[ offset + 3 ], arr[ offset + 2 ], arr[ offset + 1 ], arr[ offset + 0 ] )
+	q.set( -arr[ offset + 3 ], arr[ offset + 2 ], arr[ offset + 1 ], arr[ offset + 0 ] );
 }
 
 function threeQuatFromManusQuat5(q, arr, offset=0) {
-	q.set( -arr[ offset + 3 ], arr[ offset + 2 ], -arr[ offset + 1 ], arr[ offset + 0 ] )
+	q.set( -arr[ offset + 3 ], arr[ offset + 2 ], -arr[ offset + 1 ], arr[ offset + 0 ] );
 }
 
 
@@ -117,7 +123,6 @@ function getHandsL( hand ) {
       threeQuatFromManusQuat2( leftJoints[i][j].quaternion, h.jointOrientations, 20 * i + 4 *( j + 1 ) );
     }
   }
-
 }
 
 function getHandsR( hand ) {
@@ -291,7 +296,8 @@ function initialize() {
   
   group = new THREE.Group();
   scene.add( group );
-  
+
+{
   //** add camera */
   camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.04, 10 );
   camera.position.set( 0, 1.6, 2 );
@@ -324,7 +330,6 @@ function initialize() {
   scene.add( room );
   
   //** add floor */
-  
   floor = new THREE.Mesh( geometries[7], materials[5] );
   floor.rotation.x = - Math.PI / 2;
   floor.receiveShadow = true;
@@ -348,22 +353,21 @@ function initialize() {
   document.body.appendChild( WEBVR.createButton( renderer ) );
   
   //** geometry components for building VR hand models */
-
-  let X = new THREE.Mesh( geometries[0],   new THREE.MeshStandardMaterial( { 
-    color: 0xff0000 
-  } ) );
-  X.position.set( 1, 0, 0 );
-  scene.add( X );
-  let Y = new THREE.Mesh( geometries[0],   new THREE.MeshStandardMaterial( { 
-    color: 0x00ff00 
-  } ) );
-  Y.position.set( 0, 1, 0 );
-  scene.add( Y );
-  let Z = new THREE.Mesh( geometries[0],   new THREE.MeshStandardMaterial( { 
-    color: 0x0000ff 
-  } ) );
-  Z.position.set( 0, 0, 1 );
-  scene.add( Z );
+  // let X = new THREE.Mesh( geometries[0],   new THREE.MeshStandardMaterial( { 
+  //   color: 0xff0000 
+  // } ) );
+  // X.position.set( 1, 0, 0 );
+  // scene.add( X );
+  // let Y = new THREE.Mesh( geometries[0],   new THREE.MeshStandardMaterial( { 
+  //   color: 0x00ff00 
+  // } ) );
+  // Y.position.set( 0, 1, 0 );
+  // scene.add( Y );
+  // let Z = new THREE.Mesh( geometries[0],   new THREE.MeshStandardMaterial( { 
+  //   color: 0x0000ff 
+  // } ) );
+  // Z.position.set( 0, 0, 1 );
+  // scene.add( Z );
 
 
   //** wrist */
@@ -373,7 +377,7 @@ function initialize() {
   leftWrist.add( new THREE.AxesHelper( 0.05 ) );
   rightWrist.add( new THREE.AxesHelper( 0.05 ) );
 
-  leftWrist.position.set( 2, 1.5, -1.5 );
+  leftWrist.position.set( 0, 1.5, 0 );
   rightWrist.position.set( 0.5, 1.5, -1 );
   
   leftWrist.MatrixAutoUpdate = true;
@@ -383,7 +387,7 @@ function initialize() {
   group.add( rightWrist );
   // scene.add( wrist );
 
-  // //** palm */
+  //** palm */
   // let palm = new THREE.Mesh( geometries[2], materials[1] );
   // palm.position.z = wrist.position.z + 0.035;
   // // wrist.add( palm );
@@ -395,7 +399,7 @@ function initialize() {
 
     // joints
     let parent = leftWrist;
-    leftJoints[i] = []
+    leftJoints[i] = [];
 
     for ( let j=0; j<3; j++ ) {
 
@@ -502,6 +506,32 @@ function initialize() {
   // window.addEventListener( 'vrdisplaypointerrestricted', onPointerRestricted, false );
   // window.addEventListener( 'vrdisplaypointerunrestricted', onPointerUnrestricted, false );
   window.addEventListener( 'resize', onWindowResize, false );
+}
+
+  flock = new THREE.Group();
+  room.add(flock);
+  //** BOIDS */
+  for ( let i = 0; i < 10; i ++ ) {
+    //let parent = leftWrist;
+    boids[i] = [];
+    let boid = new THREE.Mesh( geometries[0], materials[0] );
+
+    boid.position.z = 0; boid.position.x = 0;
+    boid.position.y = Math.random() * i * 0.01;
+    //boid.position.x = Math.random() * 4 - 2;
+    //boid.position.y = Math.random() * 4;
+    //boid.position.z = Math.random() * 4 - 2;
+
+    boid.userData.velocity = new THREE.Vector3();
+    boid.userData.velocity.x = .2 * Math.random() - 1;
+    boid.userData.velocity.y = .2 * Math.random() - 1;
+    boid.userData.velocity.z = .2 * Math.random() - 1;
+
+    flock.add( boid );
+    boids[i] = boid;
+
+}
+
 
   try {
     sock = connect_to_server( {}, write );
@@ -706,12 +736,53 @@ function render() {
 
   //** manage intersections */
   cleanIntersected();
-  intersectObjects( leftHandControl );
-  intersectObjects( rightHandControl );
+  //intersectObjects( leftHandControl );
+  //intersectObjects( rightHandControl );
   intersectHead();
-  checkRoom();
+  //checkRoom();
   
+  //** BOIDS */
+
+  let delta = clock.getDelta();
+
+  //let range = 0.05 - radius;
+  let range = leftJoints[2][1];
+  let flockX = range.position.x + radius;
+  let flockY = range.position.y + radius;
+  let flockZ = range.position.z + radius;
+
+  for ( let i = 0; i < flock.children.length; i ++ ) {
+
+    let object = flock.children[ i ];
+
+    object.position.x += object.userData.velocity.x * delta * 0.1;
+    object.position.y += object.userData.velocity.y * delta;
+    object.position.z += object.userData.velocity.z * delta * 0.5;
+
+    if ( object.position.x < - flockX  || object.position.x > flockX  ) {
+
+      object.position.x = flockX; //THREE.Math.clamp( object.position.x, flockX, - flockX );
+      object.userData.velocity.x = - object.userData.velocity.x;
+
+    }
+
+    if ( object.position.y < flockY || object.position.y > flockY ) {
+
+      object.position.y = THREE.Math.clamp( object.position.y, leftWrist.position.y, leftWrist.position.y+i );// flockY + i*0.01;//Math.max( object.position.y, flockY + i*0.01 );
+      object.userData.velocity.y = - object.userData.velocity.y;
+
+    }
+
+    if ( object.position.z < - flockZ || object.position.z > flockZ ) {
+
+      object.position.z = flockZ; // THREE.Math.clamp( object.position.z, flockZ, - flockZ );
+      object.userData.velocity.z = - object.userData.velocity.z;
+
+    }
+
+  }
+
+
   renderer.render( scene, camera );
 
 }
-
