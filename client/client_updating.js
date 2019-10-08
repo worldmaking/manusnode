@@ -1,13 +1,33 @@
 
 
+//  // USEFUL QUATERNIONS //  // 
+// [w, x, y, z] = [cos(a/2), sin(a/2) * nx, sin(a/2)* ny, sin(a/2) * nz]
+// [x]       [y]       [z]       [w]      //** description */
+// [0]       [0]       [0]       [1]      //** identity */
+// [1]       [0]       [0]       [0]      //** 180 around X : pitch */
+// [0]       [1]       [0]       [0]      //** 180 around Y : yaw   */
+// [0]       [0]       [1]       [0]      //** 180 around Z : roll  */
+// [sq(.5)]  [0]       [0]       [sq(.5)] //** +90 around X : CW    */
+// [0]       [sq(.5)]  [0]       [sq(.5)] //** +90 around Y : CW    */
+// [0]       [0]       [sq(.5)]  [sq(.5)] //** +90 around Z : CW    */
+// [-sq(.5)] [0]       [0]       [sq(.5)] //** -90 around X : CCW   */
+// [0]       [-sq(.5)] [0]       [sq(.5)] //** -90 around Y : CCW   */
+// [0]       [0]       [-sq(.5)] [sq(.5)] //** -90 around Z : CCW   */
+
+
+
 //  //  VARIABLES  //  //
+
+const UNITVECTOR_X = new THREE.Vector3(1,0,0);
+const UNITVECTOR_Y = new THREE.Vector3(0,1,0);
+const UNITVECTOR_Z = new THREE.Vector3(0,0,1);
 
 let log = document.getElementById( "log" );
 let state_div = document.getElementById( "state" );
 let msgs = [];
 
 let container;
-let camera, scene, renderer;
+let camera, scene, renderer, controls; 
 
 let crosshair, 
     raycaster, 
@@ -22,8 +42,12 @@ let rightWristMatrix = new THREE.Matrix4();
 
 let tempQuaternion = new THREE.Quaternion();
 let targetRotation = new THREE.Quaternion();
+let fromHere = new THREE.Quaternion();
+let toThere = new THREE.Quaternion();
 
-let group, room, floor;
+let gloves, room, floor;
+let planeX, planeY, planeZ;
+let up, down, left, right;
 
 let leftHand,
     leftHandControl, 
@@ -36,7 +60,7 @@ let leftWrist,
     rightJoints = [];
 
 let geometries = [
-  new THREE.ConeGeometry( 0.1, 0.2, 32 ), // [0] boids //0.01 0.02
+  new THREE.ConeGeometry( 0.01, 0.05, 32 ), // [0] boids //0.01 0.02
   new THREE.TorusGeometry( 0.03, 0.01, 16, 100 ), // [1] wrist
   new THREE.BoxGeometry( 0.06, 0.01, 0.07 ), // [2] palm
   new THREE.BoxGeometry( 0.01, 0.01, 0.01 ), // [3] joints
@@ -83,76 +107,129 @@ let state = null;
 let sock;
 
 //** 3D BOIDS */
+let flock;
 let radius = 0.2;
 let clock = new THREE.Clock();
 let boids = [];
 let axis = new THREE.Vector3();
 let radians;
 
+
 //  // UPDATE WORLD FUNCTIONS //  //
 
-function quatFromNormal( n, q ) {
-  q = q || new THREE.Quaternion();
-  if ( n.y > 0.99999 ) {
-    q.set( 0, 0, 0, 1);
-  } else if ( n.y < -0.99999 ) {
-    q.set( 1, 0, 0, 0 );
-  } else {
-    axis.set( n.z, 0, -n.x ).normalize();
-    radians = Math.acos( n.y );
-    q.setFromAxisAngle( axis, radians );
-  }
-}
+// function quatFromNormal( n, q ) {
+//   q = q || new THREE.Quaternion();
+//   if ( n.y > 0.99999 ) {
+//     q.set( 0, 0, 0, 1);
+//   } else if ( n.y < -0.99999 ) {
+//     q.set( 1, 0, 0, 0 );
+//   } else {
+//     axis.set( n.z, 0, -n.x ).normalize();
+//     radians = Math.acos( n.y );
+//     q.setFromAxisAngle( axis, radians );
+//   }
+// }
+
+// function rotateFromHereToThere( qin, qout ) {
+
+//   let qRot = new THREE.Quaternion();
+
+//   //** rotation quaternion must be normalized to represent an orientation */
+//   //** otherwise it is a 'pure' qauternion (L!=1) */
+
+//   fromHere = qin.clone().normalize();
+//   toThere = qout.clone().normalize();
+//   let dot = fromHere.dot( toThere );
+
+//   if ( dot >= 1.0 ) {
+    
+//     qRot.copy( qin );
+ 
+//   } else if ( dot < (-0.999999) ) {
+ 
+//     let axis = UNITVECTOR_X.cross( fromHere );
+ 
+//     if ( axis.length() == 0.0 ) {
+ 
+//       axis = UNITVECTOR_Y.cross( fromHere );
+ 
+//     }
+ 
+//     axis.normalize();
+//     qRot.setFromAxisAngle( axis, Math.PI );
+ 
+//   } else {
+ 
+//     let s = Math.sqrt( ( 1 + dot ) * 2 );
+//     let inverse = 1 / s;
+//     let cross = fromHere.cross(toThere);
+
+//     qRot.x = ( cross.x * inverse ); 
+//     qRot.y = ( cross.y * inverse );
+//     qRot.z = ( cross.z * inverse );
+//     qRot.w = ( s * 0.5 );
+//     qRot.normalize();
+ 
+//   }
+
+//   return qRot;
+
+// }
 
 function threeQuatFromManusQuat( q, arr, offset=0 ) {
   //** swap quaternion differences */
-	//** Manus: [w] 			[x]v 			[y] 			[z]< */
-	//** Three: [x]> 			[y] 			[z]v 			[w] */
-  q.set( -arr[ offset + 3 ], -arr[ offset + 2 ], -arr[ offset + 1 ], arr[ offset + 0 ] );
+  //** Manus: [w] 	 		  [x]v   		[y]^ 			  [z]<    */
+  //** Manus: [x]v 			  [y]^      [z]< 		  	[w=>0]  */
+  //** Manus: [z->x]<		  [y]^      [x->z]v	  	[w=>0]  */
+  //** Manus: [-z]->>     [y] 	    [x]v      	[w=>0]  */
+	//** Three: [x]> 			  [y]^ 	  	[z]v   			[w]     */
+  q.set( -arr[ offset + 3 ], arr[ offset + 2 ], arr[ offset + 1 ], arr[ offset + 0 ] );
 }
 
-function threeQuatFromManusQuat2(q, arr, offset=0) {
-	q.set( arr[ offset + 3 ], arr[ offset + 2 ], arr[ offset + 1 ], arr[ offset + 0 ] );
-}
-
-function threeQuatFromManusQuat3(q, arr, offset=0) {
-	q.set( -arr[ offset + 3 ], -arr[ offset + 2 ], arr[ offset + 1 ], -arr[ offset + 0 ] );
-}
-
-function threeQuatFromManusQuat4(q, arr, offset=0) {
-	q.set( -arr[ offset + 3 ], arr[ offset + 2 ], arr[ offset + 1 ], arr[ offset + 0 ] );
-}
-
-function threeQuatFromManusQuat5(q, arr, offset=0) {
-	q.set( -arr[ offset + 3 ], arr[ offset + 2 ], -arr[ offset + 1 ], arr[ offset + 0 ] );
-}
-
-
-function getHandsL( hand ) {
-  
-  h = state.devices[hand];
+function getHandsL( hands ) {
+  h = state.devices[hands];
   threeQuatFromManusQuat( leftWrist.quaternion, h.wristOrientation );
   for ( let i=0; i<5; i++ ) {
     for ( let j=0; j<3; j++ ) {
-      threeQuatFromManusQuat2( leftJoints[i][j].quaternion, h.jointOrientations, 20 * i + 4 *( j + 1 ) );
+       threeQuatFromManusQuat( leftJoints[i][j].quaternion, h.jointOrientations, 20 * i + 4 *( j + 1 ) );
+     }
+   }
+}
+
+function getHandsR( hands ) {
+  h = state.devices[hands];
+  threeQuatFromManusQuat( rightWrist.quaternion, h.wristOrientation );
+  for ( let i=0; i<5; i++ ) {
+    for ( let j=0; j<3; j++ ) {
+        threeQuatFromManusQuat( rightJoints[i][j].quaternion, h.jointOrientations, 20 * i + 4 *( j + 1 ) );
     }
   }
 }
 
-function getHandsR( hand ) {
-  
-  h = state.devices[hand];
-  threeQuatFromManusQuat3( rightWrist.quaternion, h.wristOrientation );
-  for ( let i=0; i<5; i++ ) {
-    for ( let j=0; j<3; j++ ) {
-      if ( i==0 ) {
-        threeQuatFromManusQuat5( rightJoints[i][j].quaternion, h.jointOrientations, 20 * i + 4 *( j + 1 ) );
-      } else {
-        threeQuatFromManusQuat4( rightJoints[i][j].quaternion, h.jointOrientations, 20 * i + 4 *( j + 1 ) );
-      }
-    }
+
+THREE.Object3D.prototype.rotateAroundWorldAxis = function() {
+
+  var q1 = new THREE.Quaternion();
+  return function ( point, axis, angle ) {
+
+      q1.setFromAxisAngle( axis, angle );
+
+      this.quaternion.multiplyQuaternions( q1, this.quaternion );
+
+      this.position.sub( point );
+      this.position.applyQuaternion( q1 );
+      this.position.add( point );
+
+      return this;
   }
 
+}();
+
+function reparentObject3D(subject, newParent)
+{
+    subject.matrix.copy(subject.matrixWorld);
+    subject.applyMatrix(new THREE.Matrix4().getInverse(newParent.matrixWorld));
+    newParent.add(subject);
 }
 
 //  //  FUNCTION CALLS  //  //
@@ -307,19 +384,22 @@ function initialize() {
   //** add scene */
   scene = new THREE.Scene();
   scene.background = new THREE.Color( 0x808080 );
+  //scene.fog	= new THREE.FogExp2( 0xdde0f0, 0.0025 );
   
-  group = new THREE.Group();
-  scene.add( group );
+  //gloves = new THREE.Group();
+  //scene.add( gloves );
 
-{
   //** add camera */
   camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.04, 10 );
   camera.position.set( 0, 1.6, 2 );
   //** camera crosshairs | for intersections and to orientate sightline */
   crosshair = new THREE.Mesh( geometries[5], materials[3]  );
   camera.add( crosshair );
-  crosshair.position.z = - 1; //** keep crosshair slightly infront of you at all times */
+  //crosshair.position.z = - 1; //** keep crosshair slightly infront of you at all times */
   scene.add( camera );
+
+  // controls = new THREE.OrbitControls(camera);
+  // camera.lookAt(0,  - .5, 0);
 
   let vec = new THREE.Vector3( 0, 0, -1 );
   vec.applyQuaternion( camera.quaternion );
@@ -370,17 +450,80 @@ function initialize() {
   leftWrist = new THREE.Mesh( geometries[1], materials[2] );
   rightWrist = new THREE.Mesh( geometries[1], materials[2] );
   
+  leftWrist.position.set( 0, 1.3, + 0.1 ); // 0, 1.5, 0
+  rightWrist.position.set( 0, 1.3, - 0.1 ); // 0.5, 1.5, -1
+
   leftWrist.add( new THREE.AxesHelper( 0.05 ) );
   rightWrist.add( new THREE.AxesHelper( 0.05 ) );
 
-  leftWrist.position.set( 0, 1.5, 0 );
-  rightWrist.position.set( 0.5, 1.5, -1 );
-  
-  leftWrist.MatrixAutoUpdate = true;
-  rightWrist.MatrixAutoUpdate = true;
+  // Rotate an object around an arbitrary axis in object space
+var rotObjectMatrix;
+function rotateAroundObjectAxis(object, axis, radians) {
+    rotObjectMatrix = new THREE.Matrix4();
+    rotObjectMatrix.makeRotationAxis(axis.normalize(), radians);
 
-  group.add( leftWrist );
-  group.add( rightWrist );
+    // old code for Three.JS pre r54:
+    // object.matrix.multiplySelf(rotObjectMatrix);      // post-multiply
+    // new code for Three.JS r55+:
+    object.matrix.multiply(rotObjectMatrix);
+
+    // old code for Three.js pre r49:
+    // object.rotation.getRotationFromMatrix(object.matrix, object.scale);
+    // old code for Three.js r50-r58:
+    // object.rotation.setEulerFromRotationMatrix(object.matrix);
+    // new code for Three.js r59+:
+    object.rotation.setFromRotationMatrix(object.matrix);
+}
+
+var rotWorldMatrix;
+// Rotate an object around an arbitrary axis in world space       
+function rotateAroundWorldAxis(object, axis, radians) {
+    rotWorldMatrix = new THREE.Matrix4();
+    rotWorldMatrix.makeRotationAxis(axis.normalize(), radians);
+
+    // old code for Three.JS pre r54:
+    //  rotWorldMatrix.multiply(object.matrix);
+    // new code for Three.JS r55+:
+    rotWorldMatrix.multiply(object.matrix);                // pre-multiply
+
+    object.matrix = rotWorldMatrix;
+
+    // old code for Three.js pre r49:
+    // object.rotation.getRotationFromMatrix(object.matrix, object.scale);
+    // old code for Three.js pre r59:
+    // object.rotation.setEulerFromRotationMatrix(object.matrix);
+    // code for r59+:
+    object.rotation.setFromRotationMatrix(object.matrix);
+}
+var rotAxis = new THREE.Vector3(0,1,0);
+rotateAroundWorldAxis(leftWrist, rotAxis, Math.PI / 180);
+rotateAroundWorldAxis(rightWrist, rotAxis, Math.PI / 180);
+  //q.clone( leftWrist.normalize() );
+  //q.up( 0, 1, 0 );
+  // q.rotateOnWorldAxis( new THREE.Vector3( 0, 1, 0 ), - Math.PI / 2 );
+  // leftWrist.quaternion.premultiply( q );
+  // leftWrist.quaternion.multiply( q.inverse() ); 
+  //leftWrist.localToWorld( q. );
+
+  //************************************//
+  //        LHS  Forward  RHS           //
+  //         -     [-X]    -            //
+  //       -| |-         -| |-          //
+  //     -| | | |       | | | |-        //
+  //    | |     | -   - |     | | Right //
+  // +Z |  [+Y]   /   \         |  [-Z] //
+  //     \       /     \       /        //
+  //      \_____/       \_____/         //
+  //        +X            +X            //
+  //                                    //
+  //************************************//          
+    
+  // leftWrist.MatrixAutoUpdate = true;
+  // rightWrist.MatrixAutoUpdate = true;
+
+  // gloves.add();
+  room.add( leftWrist );
+  room.add( rightWrist );
   // scene.add( wrist );
 
   //** left fingertips */
@@ -399,9 +542,9 @@ function initialize() {
         // thumb
         switch( j ) {
 
-          case 0: joint.position.z = -0.02; joint.position.x = +0.04; break;
-          case 1: joint.position.z = -0.025; break;
-          case 2: joint.position.z = -0.02; break;
+          case 0: joint.position.x = -0.02; joint.position.z = - 0.04; break;
+          case 1: joint.position.x = -0.025; break;
+          case 2: joint.position.x = -0.02; break;
         
         } // 0.06
 
@@ -410,13 +553,16 @@ function initialize() {
         // fingers
         switch( j ) {
 
-          case 0: joint.position.z = -0.05; joint.position.x = ( 2.5 - i ) *+ 0.015; break;
-          case 1: joint.position.z = -0.03; break;
-          case 2: joint.position.z = -0.02; break;
+          case 0: joint.position.x = -0.05; joint.position.z = ( - 2.5 + i ) *- 0.015; break;
+          case 1: joint.position.x = -0.03; break;
+          case 2: joint.position.x = -0.02; break;
 
         } // 0.115
       }
 
+      reparentObject3D( joint, scene );
+      rotateAroundWorldAxis( joint, rotAxis, Math.PI / 2 );
+      //reparentObject3D( joint, parent );
       parent.add( joint );
       parent = joint;
       leftJoints[i][j] = joint;
@@ -425,6 +571,24 @@ function initialize() {
     
     }
   }
+
+  // let pivot = new THREE.Object3D();
+  // pivot.rotation.set( 0, 0, 0 );
+  // pivot.updateMatrixWorld();
+
+  // for ( var i in leftJoints ) {
+
+  //     THREE.SceneUtils.attach( leftJoints[ i ], scene, pivot );
+
+  // }
+  // //rotateAroundWorldAxis(pivot, rotAxis, Math.PI / 180);
+  // pivot.updateMatrixWorld();
+  // for ( var i in leftJoints ) {
+
+  //     cubes[ i ].updateMatrixWorld(); // if not done by the renderer
+  //     THREE.SceneUtils.detach( leftJoints[ i ], pivot, scene );
+
+  // }
 
   //** right fingertips */
   for ( let i=0; i<5; i++ ) {
@@ -442,9 +606,9 @@ function initialize() {
         // thumb
         switch( j ) {
 
-          case 0: joint.position.z = -0.02; joint.position.x = 0.04; break;
-          case 1: joint.position.z = -0.025; break;
-          case 2: joint.position.z = -0.02; break;
+          case 0: joint.position.x = -0.02; joint.position.z = + 0.04; break;
+          case 1: joint.position.x = -0.025; break;
+          case 2: joint.position.x = -0.02; break;
         
         } // 0.06
 
@@ -453,9 +617,9 @@ function initialize() {
         // fingers
         switch( j ) {
 
-          case 0: joint.position.z = -0.05; joint.position.x = ( 2.5 - i ) *+ 0.015; break;
-          case 1: joint.position.z = -0.03; break;
-          case 2: joint.position.z = -0.02; break;
+          case 0: joint.position.x = -0.05; joint.position.z = ( 2.5 - i ) *+ 0.015; break;
+          case 1: joint.position.x = -0.03; break;
+          case 2: joint.position.x = -0.02; break;
 
         } // 0.115
       }
@@ -495,59 +659,10 @@ function initialize() {
   // window.addEventListener( 'vrdisplaypointerrestricted', onPointerRestricted, false );
   // window.addEventListener( 'vrdisplaypointerunrestricted', onPointerUnrestricted, false );
   window.addEventListener( 'resize', onWindowResize, false );
-}
-  //** 3D BOIDS */
-  flock = new THREE.Group();
-  room.add(flock);
 
-  for ( let i = 0; i < 100; i ++ ) {
-    //let parent = leftWrist;
-    boids[i] = [];
-
-    let h = Math.random()*360 / 360;
-    let s = Math.random();
-    let l = Math.random();
-
-    let mat = new THREE.MeshLambertMaterial( { color: 0xffffff } );
-		mat.color.setHSL( h, s, l );
-
-    let boid = new THREE.Mesh( geometries[0], mat );
-
-    boid.position.x = 6 * Math.random() - 3;
-    boid.position.y = 3 * Math.random() - 1.5;
-    boid.position.z = 6 * Math.random() - 3;
-
-    boid.userData.velocity = new THREE.Vector3();
-    boid.userData.velocity.x = Math.random() - 0.5;
-    boid.userData.velocity.y = Math.random() - 0.5;
-    boid.userData.velocity.z = Math.random() - 0.5;
-
-    boid.userData.acceleration = new THREE.Vector3();
-    boid.userData.acceleration.x = 0;
-    boid.userData.acceleration.y = 0;
-    boid.userData.acceleration.z = 0;
-
-    boid.userData.force = new THREE.Vector3();
-    boid.userData.force.x = 0;
-    boid.userData.force.y = 0;
-    boid.userData.force.z = 0;
-   
-    boid.userData.size = 2 + Math.random() * 6;
-    boid.userData.mass = Math.pow( boid.userData.size / 5 , 1.5 );
-    
-    //** orientation */
-    // let A = new THREE.Vector3( 1, 1, 1, );
-    // let B = boid.userData.velocity;
-    // let normal = B.clone().sub(A).normalize();
-    // let quaternion = quatFromNormal( normal );
-    // boid.quaternion.copy( quaternion );
-    
-    boid.userData.state = 0;
-
-    flock.add( boid );
-    boids[i] = boid;
-
-}
+  // //** 3D BOIDS */
+  // flock = new THREE.Group();
+  // room.add(flock);
 
   try {
     sock = connect_to_server( {}, write );
@@ -604,7 +719,7 @@ function onSelectEnd( event ) {
     object.matrix.premultiply( handAction.matrixWorld );
     object.matrix.decompose( object.position, object.quaternion, object.scale );
     object.material.emissive.b = 0;
-    group.add( object );
+    gloves.add( object );
 
     handAction.userData.selected = undefined;
 
@@ -620,7 +735,7 @@ function getIntersections( handAction ) {
   raycaster.ray.origin.setFromMatrixPosition( handAction.matrixWorld );
   raycaster.ray.direction.set( 0, 0, -1 ).applyMatrix4( tempMatrix );
 
-  return raycaster.intersectObjects( group.children );
+  return raycaster.intersectObjects( room.children );
 
 }
 
@@ -655,7 +770,7 @@ function intersectObjects( handAction ) {
 function intersectHead() {
   
   raycaster.setFromCamera( { x: 0, y: 0 }, camera );
-  let intersects = raycaster.intersectObjects( group.children );
+  let intersects = raycaster.intersectObjects( room.children );
   
   if ( intersects.length > 0 ) {
     
@@ -666,7 +781,7 @@ function intersectHead() {
       intersected = intersects[ 0 ].object;
       intersected.currentHex = intersected.material.emissive.getHex();
       intersected.material.emissive.setHex( 0xff0000 );
-      intersected.rotation.y += 0.5;
+      //intersected.rotation.y += 0.5;
       // intersected.position.z -= 0.1;
 
     }
@@ -710,173 +825,35 @@ function checkRoom() {
 
 //  // 3D BOIDS //  //
 
-function checkBoids( range ) {
+// function checkBoids( range ) {
   
-  for ( let i = 0; i < flock.children.length; i ++ ) {
+//   for ( let i = 0; i < flock.children.length; i ++ ) {
 
-    let object = flock.children[ i ];
+//     let object = flock.children[ i ];
 
-    if ( object.position.x < - range  || object.position.x > range  ) {
+//     if ( object.position.x < - range  || object.position.x > range  ) {
 
-      object.position.x = THREE.Math.clamp( object.position.x, - range, range );
-      object.userData.velocity.x = - object.userData.velocity.x;
+//       object.position.x = THREE.Math.clamp( object.position.x, - range, range );
+//       object.userData.velocity.x = - object.userData.velocity.x;
 
-    }
-
-    if ( object.position.y < 0 || object.position.y > range ) {
-
-      object.position.y = THREE.Math.clamp( object.position.y, 0, range );
-      object.userData.velocity.y = - object.userData.velocity.y;
-
-    }
-
-    if ( object.position.z < - range || object.position.z > range ) {
-
-      object.position.z =  THREE.Math.clamp( object.position.z, - range, range );
-      object.userData.velocity.z = - object.userData.velocity.z;
-
-    }
-
-  }
-  
-}
-
-// function applyForces( object ){
-
-//   let forces = object;
-
-//   // sense the enviornment
-//   // decide what to do
-//   // compute forces
-  
-//   // wander
-//   let deviation_factor = 0.1;
-//   let wander_factor = 0.8;
-//   let separation_factor = 3;
-//   let cohesion_factor = 0.03;
-//   let alignment_factor = 0.1;
-  
-//   let separation_distance = 25;
-//   let cohesion_distance = 50;
-//   let alignment_distance = 40;
-
-//   //let forward_unit_vector = forces.quaternion();
-
-//   // compute a point that is in front of the agent
-//   // but deviated from that by a small amount
-//   // this point *is* the desired velocity
-//   let deviation_angle = Math.PI * 2 * Math.random();
-//   let desired_vel = new THREE.Vector3( forces.userData.position.x + deviation_factor * Math.sin( 0.5 * deviation_angle ), forces.userData.position.y + deviation_factor * Math.sin( 0.5 * deviation_angle ), forces.userData.position.z + deviation_factor * Math.sin( 0.5 * deviation_angle ) );
-
-//   // turn that into force
-//   desired_vel.sub( forces.userData.velocity );
-//   // scale it down according to how influential it is:
-//   desired_vel.multiplyScalar( wander_factor );
-//   // include in our forces:
-//   forces.userData.velocity.add( desired_vel );
-  
-//   // separation
-//   let cohesion_count = 0;
-//   let cohesion_subtotal = new THREE.Vector3();
-//   let alignment_count = 0;
-//   let alignment_subtotal = new THREE.Vector3();
-  
-//   // first a search is made to find other characters within the specified neighborhood. 
-//   for (let b of boids) {
-//     // skip self:
-//     if ( forces == b ) continue;
-   
-//     // For each nearby character, 
-//     // subtracting the positions of our character and the nearby character
-//     let relative = new THREE.Vector3();
-//     relative.subVectors( b.position, forces.position );
-        
-//     // get distance:
-//     let distance = relative.length();
-//     if ( distance < separation_distance ) {
-//       // applying a 1/(r*r) weighting.
-//       // also scale force:
-//       relative.multiplyScalar( separation_factor / ( distance * distance ) );
-//       // repulsive force therefore subtract rather than add:
-//       forces.userData.force.sub( relative );
 //     }
-        
-//     // // get relative angle between
-//     // // forward_unit_vector, rel
-//     // let relative = new THREE.Vector3();
-//     // vec2.normalize(vec2.create(), rel);
-//     // let dot = vec2.dot(reln, forward_unit_vector);
-//     // // eyes on the back too:
-//     // dot = Math.abs(dot);
-    
-//     // let rel_angle = Math.acos(dot);
-//     // //let rel_angle = vec2.angle(rel, forward_unit_vector);
-//     // if (rel_angle > Math.PI * 0.4) {
-//     //   continue;
-//     // }
-    
-//     // cohesion:
-//     if ( distance < cohesion_distance ) {
-//       // computing the “average position” (or “center of gravity”) of the nearby characters. 
-//       // cohesion_subtotal = cohesion_subtotal + b.pos
-//       cohesion_subtotal.add( b.position );
-//       cohesion_count++;
-//     }
-//     // alignment
-//     if ( distance < alignment_distance ) {
-//       // averaging together the velocity of neighbours:
-//       alignment_subtotal.add( b.userData.velocity );
-//       alignment_count++;
-//     }
-    
-//   } // end of all-nearby-agents loop
-  
-//   // cohesion
-//   if ( cohesion_count > 0 ) {
-//     forces.userData.state = 0;
-//     // average_point = cohesion_subtotal / cohesion_count
-//     //let average_colour = 0;
-//     let average_point = new THREE.Vector3();
-//     average_point.multiplyScalar( cohesion_subtotal / cohesion_count );
-    
-//     // this.colour = colour_subtotal / cohesion_count;
-//     // if (cohesion_count > 5) {
-//     //   this.state = 1; //change boid type
-//     //   this.size = 3;
-//     //   this.colour = 200;
-//     // }
-        
-//     let desired_vel = new THREE.Vector3();
-//     desired_vel.subVectors( average_point, forces.position );
 
-//     // if (cohesion_count > 2) {
-//     //   vec2.scale(desired_vel, desired_vel, -1);
-//     // }
-    
-//     // turn that into force
-//     let desired_acceleration = new THREE.Vector3();
-//     desired_acceleration.subVectors( desired_vel, forces.userData.velocity );
-//     // scale it down according to how influential it is:
-//     desired_acceleration.multiplyScalar( cohesion_factor );
-//     // include in our forces:
-//     forces.userData.force.add( desired_acceleration );
-//   } 
-//   // alignment
-//   if ( alignment_count > 0 ) {
-//     // average_point = cohesion_subtotal / cohesion_count
-//     let average_vel = new THREE.Vector3();
-//     average_vel = alignment_subtotal.multiplyScalar( 1 / alignment_count );
-        
-//     let desired_vel = average_vel;
-    
-//     // turn that into force
-//     let desired_acceleration = new THREE.Vector3();
-//     desired_acceleration.subVectors( desired_vel, force.userData.velocity );
-//     // scale it down according to how influential it is:
-//     desired_acceleration.multiplyScalar( alignment_factor );
-//     // include in our forces:
-//     forces.userData.force.add( desired_acceleration );
+//     if ( object.position.y < 0 || object.position.y > range ) {
+
+//       object.position.y = THREE.Math.clamp( object.position.y, 0, range );
+//       object.userData.velocity.y = - object.userData.velocity.y;
+
+//     }
+
+//     if ( object.position.z < - range || object.position.z > range ) {
+
+//       object.position.z =  THREE.Math.clamp( object.position.z, - range, range );
+//       object.userData.velocity.z = - object.userData.velocity.z;
+
+//     }
+
 //   }
+  
 // }
 
 
@@ -898,6 +875,8 @@ function animate() {
 }
 
 function render() {
+  
+  //controls.update();
 
   try {
     sock.send( "getData" );
@@ -912,13 +891,13 @@ function render() {
 	//** [1] SOURCE_FILTERED_DEFAULT - RH */
 	//** [2] SOURCE_DEVICEDATA - LH */
   //** [3] SOURCE_DEVICEDATA - RH */
-  let deviceID = Object.keys(state.devices).sort()[2];
+  let deviceID = Object.keys(state.devices).sort()[2]; // just to indicate we are streaming something
   let hand = state.devices[deviceID];
   state_div.innerText = JSON.stringify(hand, null, "  ");
   
   //** coordinate flip due to differences in definitions of wxyz order */ 
-  getHandsL( Object.keys(state.devices).sort()[2] );
-  getHandsR( Object.keys(state.devices).sort()[3] );
+  getHandsL( Object.keys(state.devices).sort()[2]); // left
+  //getHandsR( Object.keys(state.devices).sort()[3]); // right
 
   //** manage intersections */
   cleanIntersected();
@@ -928,124 +907,14 @@ function render() {
   //checkRoom();
   
   //** 3D BOIDS */
-  let delta = clock.getDelta();
-  let range = 5 - radius;
+  //checkBoids( range );
 
-  checkBoids( range );
-
-  for ( let i = 0; i < flock.children.length; i ++ ) {
-
-    let object = flock.children[ i ];
-
-    object.position.x += object.userData.velocity.x * delta + ( object.userData.acceleration.x * Math.pow(delta, 2) ) / 2;
-    object.position.y += object.userData.velocity.y * delta + ( object.userData.acceleration.y * Math.pow(delta, 2) ) / 2;
-    object.position.z += object.userData.velocity.z * delta + ( object.userData.acceleration.z * Math.pow(delta, 2) ) / 2;
-
-    object.userData.velocity.x += object.userData.acceleration.x * delta / 2; 
-    object.userData.velocity.y += object.userData.acceleration.y * delta / 2; 
-    object.userData.velocity.z += object.userData.acceleration.z * delta / 2;
-
-    // object.userData.force.x += 0.5 * 0.1 * ( object.userData.velocity.x * Math.abs(object.userData.velocity.x) )
-    // object.userData.force.y += 0.5 * 0.1 * ( object.userData.velocity.y * Math.abs(object.userData.velocity.y) )
-    // object.userData.force.z += 0.5 * 0.1 * ( object.userData.velocity.z * Math.abs(object.userData.velocity.z) )
-
-    //applyForces( object );
-
-    // let deviation_factor = 0.2;
-    // let wander_factor = 1;
-    // let separation_factor = 3;
-    // let cohesion_factor = 0.03;
-    // let alignment_factor = 0.01;
-    
-    // let separation_distance = 2;
-    // let cohesion_distance = 5;
-    // let alignment_distance = 4;
-
-    // let deviation_angle = Math.PI * 2 * Math.random();
-    // let desired_vel = new THREE.Vector3( object.position.x + deviation_factor * Math.sin( 0.5 * deviation_angle ), object.position.y + deviation_factor * Math.sin( 0.5 * deviation_angle ), object.position.z + deviation_factor * Math.sin( 0.5 * deviation_angle ) );
-
-    // desired_vel.sub( object.userData.velocity );
-    // desired_vel.multiplyScalar( wander_factor );
-    // object.userData.velocity.add( desired_vel );
-    
-    // // separation
-    // let cohesion_count = 0;
-    // let cohesion_subtotal = new THREE.Vector3();
-    // let alignment_count = 0;
-    // let alignment_subtotal = new THREE.Vector3();
-
-    // for (let b of boids) {
-    //   // skip self:
-    //   if ( object == b ) continue;
-
-    //   let relative = new THREE.Vector3();
-    //   relative.subVectors( b.position, object.position );
-          
-    //   // get distance:
-    //   let distance = relative.length();
-    //   if ( distance < separation_distance ) {
-    //     relative.multiplyScalar( separation_factor / ( distance * distance ) );
-    //     object.userData.force.sub( relative );
-    //   }
-      
-    //   // cohesion:
-    //   if ( distance < cohesion_distance ) {
-    //     cohesion_subtotal.add( b.position );
-    //     cohesion_count++;
-    //   }
-    //   // alignment
-    //   if ( distance < alignment_distance ) {
-    //     alignment_subtotal.add( b.userData.velocity );
-    //     alignment_count++;
-    //   }
-      
-    // } // end of all-nearby-agents loop
-    
-    // // cohesion
-    // if ( cohesion_count > 0 ) {
-    //   let average_point = new THREE.Vector3();
-    //   average_point.multiplyScalar( cohesion_subtotal / cohesion_count );
-
-    //   let desired_vel = new THREE.Vector3();
-    //   desired_vel.subVectors( average_point, object.position );
-
-    //   let desired_acceleration = new THREE.Vector3();
-    //   desired_acceleration.subVectors( desired_vel, object.userData.velocity );
-    //   desired_acceleration.multiplyScalar( cohesion_factor );
-    //   object.userData.force.add( desired_acceleration );
-    // } 
-    // // alignment
-    // if ( alignment_count > 0 ) {
-    //   let average_vel = new THREE.Vector3();
-    //   average_vel = alignment_subtotal.multiplyScalar( 1 / alignment_count );
-          
-    //   let desired_vel = average_vel;
-
-    //   let desired_acceleration = new THREE.Vector3();
-    //   desired_acceleration.subVectors( desired_vel, object.userData.velocity );
-    //   desired_acceleration.multiplyScalar( alignment_factor );
-    //   object.userData.force.add( desired_acceleration );
-    // }
-
-    object.userData.acceleration.x += object.userData.force.x / object.userData.mass;
-    object.userData.acceleration.y += object.userData.force.y / object.userData.mass;
-    object.userData.acceleration.z += object.userData.force.z / object.userData.mass;
-
-    object.userData.force.x = 0;
-    object.userData.force.y = 0;
-    object.userData.force.z = 0;
-    
-    // object.userData.velocity.multiplyScalar( 0.05 );
-
-    // object.position.x += object.userData.velocity.x; 
-    // object.position.y += object.userData.velocity.y;
-    // object.position.z += object.userData.velocity.z;
-
-    // object.userData.velocity.multiplyScalar( 0.05 );
-
+  //let delta = clock.getDelta();
   
+  //let range = 3 - radius;
+  //let range = 5 - radius;
 
-  }
+ //scene.updateMatrixWorld();
 
   renderer.render( scene, camera );
 
