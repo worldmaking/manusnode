@@ -158,7 +158,7 @@ function connect_to_server(opt, log) {
 				}
 			}, self.reconnect_period);		
 			//if (onclose) onclose(e);
-			log("websocket disconnected from "+addr);
+			log("websocket disconnected from "+self.addr);
 		}
 
 		self.send = function(msg) {
