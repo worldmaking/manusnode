@@ -13,6 +13,56 @@ const { vec2, vec3, vec4, quat, mat3, mat4 } = require("gl-matrix");
 
 const manus = require("./index.js")
 
+const openvr = require("./../node_vr/index.js")
+
+let trackingstate = {
+  hmd: { pos: vec3.create(), quat: quat.create() },
+  trackers: [
+    { pos: vec3.create(), quat: quat.create() },
+    { pos: vec3.create(), quat: quat.create() },
+  ]
+}
+
+const tmpmat = mat4.create();
+
+
+try {
+  openvr.init(0);
+} catch(e) {
+  throw openvr.EVRInitError[e];
+}
+function getTrackingData() {
+  //openvr.update();
+
+ // let res = openvr.waitGetPoses();
+  // if (res) {
+  //   console.log(res)
+  // }
+  let trackerCount = 0;
+  for (let i=0; i<8; i++) {
+    let devclass = openvr.getTrackedDeviceClass(i)
+
+    if (openvr.ETrackedDeviceClass[devclass] == "TrackedDeviceClass_GenericTracker") {
+      let out = trackingstate.trackers[trackerCount]
+
+      openvr.getLastPoseForTrackedDeviceIndex(i, tmpmat)
+      mat4.getTranslation(out.pos, tmpmat)
+      mat4.getRotation(out.quat, tmpmat);
+
+      trackerCount++;
+    } else if (openvr.ETrackedDeviceClass[devclass] == "TrackedDeviceClass_HMD") {
+      let out = trackingstate.hmd
+      openvr.getLastPoseForTrackedDeviceIndex(i, tmpmat)
+      mat4.getTranslation(out.pos, tmpmat)
+      mat4.getRotation(out.quat, tmpmat)
+    }
+
+  }
+
+  //console.log(state)
+  return trackingstate;
+}
+
 const project_path = process.cwd();
 const server_path = __dirname;
 const client_path = path.join(server_path, "client");
@@ -82,6 +132,8 @@ wss.on('connection', function(ws, req) {
 			if (msg == "getData") {
 				// reply:
 				ws.send(JSON.stringify({ cmd:"newData", state: manus.state }))
+
+				ws.send(JSON.stringify({ cmd: "trackingData", state:getTrackingData() }))
 			} else {
 				console.log("received message from client:", id, msg);
 			}

@@ -242,5 +242,7 @@ function render() {
 		}
 	}
 
+	//console.log("rendering")
+
 	renderer.render( scene, camera );
 }
