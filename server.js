@@ -98,6 +98,7 @@ wss.on('connection', function(ws, req) {
 
 	// do any
 	console.log("server received a connection");
+
 	console.log("server has "+wss.clients.size+" connected clients");
 	//	ws.id = uuid.v4();
 	const id = ++sessionId;

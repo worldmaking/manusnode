@@ -317,8 +317,8 @@ function connect_to_server( opt, log ) {
   
           //if (onmessage) onmessage(msg);
 					//else 
-  
-          log( "ws received", msg );
+  //
+          //log( "ws received", msg );
   
         }
 			} 
