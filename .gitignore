@@ -65,3 +65,7 @@ TestManus/
 ApolloConnector.h
 ApolloConnector.cc
 module_copy.cc
+ApolloSDK.dll
+ManusVR/
+build/
+.vscode/
