@@ -313,12 +313,21 @@ function connect_to_server( opt, log ) {
   
           state = obj.state
   
-        } else {
-  
-          //if (onmessage) onmessage(msg);
-					//else 
-  //
-          //log( "ws received", msg );
+       } else if (obj.cmd == "trackingData") {
+
+        /*ws received, {"cmd":"trackingData","state":
+        {"hmd":{"pos":{"0":-0.31410789489746094,"1":1.6376476287841797,"2":0.4556894302368164},"quat":{"0":0.13929444551467896,"1":0.2569557726383209,"2":0.034140702337026596,"3":0.9557223320007324}},"trackers":[{"pos":{"0":0.9590294361114502,"1":1.911466121673584,"2":0.5492393970489502},"quat":{"0":-0.1990630030632019,"1":0.6774951219558716,"2":0.6710811257362366,"3":0.22588586807250977}},{"pos":{"0":1.086222529411316,"1":1.8866705894470215,"2":0.4619896411895752},"quat":{"0":-0.6431819200515747,"1":-0.2571682035923004,"2":-0.28171005845069885,"3":0.6639434695243835}}]}}*/
+          let lh = obj.state.trackers[0]
+          let rh = obj.state.trackers[1]
+
+         // log(lh.pos[1])
+
+          leftWrist.position.fromArray(lh.pos);
+          rightWrist.position.fromArray(rh.pos);
+          
+				} else {
+          
+          log( "ws received", msg );
   
         }
 			} 
@@ -420,6 +429,7 @@ function initialize() {
 
   //** add room */
   room = new THREE.LineSegments( geometries[6], materials[4] );
+  room.name = "room"
   room.position.set( 0, 0, 0 );
   scene.add( room );
   
@@ -450,8 +460,8 @@ function initialize() {
   leftWrist = new THREE.Mesh( geometries[1], materials[2] );
   rightWrist = new THREE.Mesh( geometries[1], materials[2] );
   
-  leftWrist.position.set( 0, 1.3, + 0.1 ); // 0, 1.5, 0
-  rightWrist.position.set( 0, 1.3, - 0.1 ); // 0.5, 1.5, -1
+  // leftWrist.position.set( 0, 1.3, + 0.1 ); // 0, 1.5, 0
+  // rightWrist.position.set( 0, 1.3, - 0.1 ); // 0.5, 1.5, -1
 
   leftWrist.add( new THREE.AxesHelper( 0.05 ) );
   rightWrist.add( new THREE.AxesHelper( 0.05 ) );
@@ -496,8 +506,8 @@ function rotateAroundWorldAxis(object, axis, radians) {
     object.rotation.setFromRotationMatrix(object.matrix);
 }
 var rotAxis = new THREE.Vector3(0,1,0);
-rotateAroundWorldAxis(leftWrist, rotAxis, Math.PI / 180);
-rotateAroundWorldAxis(rightWrist, rotAxis, Math.PI / 180);
+// rotateAroundWorldAxis(leftWrist, rotAxis, Math.PI / 180);
+// rotateAroundWorldAxis(rightWrist, rotAxis, Math.PI / 180);
   //q.clone( leftWrist.normalize() );
   //q.up( 0, 1, 0 );
   // q.rotateOnWorldAxis( new THREE.Vector3( 0, 1, 0 ), - Math.PI / 2 );
@@ -522,8 +532,14 @@ rotateAroundWorldAxis(rightWrist, rotAxis, Math.PI / 180);
   // rightWrist.MatrixAutoUpdate = true;
 
   // gloves.add();
-  room.add( leftWrist );
-  room.add( rightWrist );
+  // room.add( leftWrist );
+  // room.add( rightWrist );
+
+  leftWrist.name = "leftWrist"
+  rightWrist.name = "rightWrist"
+
+  scene.add( leftWrist );
+  scene.add( rightWrist );
   // scene.add( wrist );
 
   //** left fingertips */
@@ -897,7 +913,7 @@ function render() {
   
   //** coordinate flip due to differences in definitions of wxyz order */ 
   getHandsL( Object.keys(state.devices).sort()[2]); // left
-  //getHandsR( Object.keys(state.devices).sort()[3]); // right
+  getHandsR( Object.keys(state.devices).sort()[3]); // right
 
   //** manage intersections */
   cleanIntersected();
