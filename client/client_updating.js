@@ -16,7 +16,9 @@
 
 
 
-//  //  VARIABLES  //  //
+//  //************************************************************************************************// VARIABLES  //  //
+//  //************************************************************************************************//
+//  //************************************************************************************************//
 
 const UNITVECTOR_X = new THREE.Vector3(1,0,0);
 const UNITVECTOR_Y = new THREE.Vector3(0,1,0);
@@ -27,7 +29,7 @@ let state_div = document.getElementById( "state" );
 let msgs = [];
 
 let container;
-let camera, scene, renderer, controls; 
+let camera, scene, renderer, controls, user; 
 
 let crosshair, 
     raycaster, 
@@ -115,66 +117,15 @@ let axis = new THREE.Vector3();
 let radians;
 
 
-//  // UPDATE WORLD FUNCTIONS //  //
+// VR STUFF
+let isInVR = false;
+let vrDisplay, frameData;
+let rightEye, leftEye;
 
-// function quatFromNormal( n, q ) {
-//   q = q || new THREE.Quaternion();
-//   if ( n.y > 0.99999 ) {
-//     q.set( 0, 0, 0, 1);
-//   } else if ( n.y < -0.99999 ) {
-//     q.set( 1, 0, 0, 0 );
-//   } else {
-//     axis.set( n.z, 0, -n.x ).normalize();
-//     radians = Math.acos( n.y );
-//     q.setFromAxisAngle( axis, radians );
-//   }
-// }
 
-// function rotateFromHereToThere( qin, qout ) {
-
-//   let qRot = new THREE.Quaternion();
-
-//   //** rotation quaternion must be normalized to represent an orientation */
-//   //** otherwise it is a 'pure' qauternion (L!=1) */
-
-//   fromHere = qin.clone().normalize();
-//   toThere = qout.clone().normalize();
-//   let dot = fromHere.dot( toThere );
-
-//   if ( dot >= 1.0 ) {
-    
-//     qRot.copy( qin );
- 
-//   } else if ( dot < (-0.999999) ) {
- 
-//     let axis = UNITVECTOR_X.cross( fromHere );
- 
-//     if ( axis.length() == 0.0 ) {
- 
-//       axis = UNITVECTOR_Y.cross( fromHere );
- 
-//     }
- 
-//     axis.normalize();
-//     qRot.setFromAxisAngle( axis, Math.PI );
- 
-//   } else {
- 
-//     let s = Math.sqrt( ( 1 + dot ) * 2 );
-//     let inverse = 1 / s;
-//     let cross = fromHere.cross(toThere);
-
-//     qRot.x = ( cross.x * inverse ); 
-//     qRot.y = ( cross.y * inverse );
-//     qRot.z = ( cross.z * inverse );
-//     qRot.w = ( s * 0.5 );
-//     qRot.normalize();
- 
-//   }
-
-//   return qRot;
-
-// }
+//  //************************************************************************************************// UPDATE WORLD FUNCTIONS //  //
+//  //************************************************************************************************//
+//  //************************************************************************************************//
 
 function threeQuatFromManusQuat( q, arr, offset=0 ) {
   //** swap quaternion differences */
@@ -207,39 +158,19 @@ function getHandsR( hands ) {
 }
 
 
-THREE.Object3D.prototype.rotateAroundWorldAxis = function() {
-
-  var q1 = new THREE.Quaternion();
-  return function ( point, axis, angle ) {
-
-      q1.setFromAxisAngle( axis, angle );
-
-      this.quaternion.multiplyQuaternions( q1, this.quaternion );
-
-      this.position.sub( point );
-      this.position.applyQuaternion( q1 );
-      this.position.add( point );
-
-      return this;
-  }
-
-}();
-
-function reparentObject3D(subject, newParent)
-{
-    subject.matrix.copy(subject.matrixWorld);
-    subject.applyMatrix(new THREE.Matrix4().getInverse(newParent.matrixWorld));
-    newParent.add(subject);
-}
-
-//  //  FUNCTION CALLS  //  //
+//  //************************************************************************************************// FUNCTION CALLS  //  //
+//  //************************************************************************************************//
+//  //************************************************************************************************//
 
 initialize();
 animate();
 
 
-//  //  SERVER CONNECT  //  //
+//  //************************************************************************************************// SERVER CONNECT  //  //
+//  //************************************************************************************************//
+//  //************************************************************************************************//
 
+//  //*************************************** // WRITE // ********************************************//
 function write( ...args ) {
 
 	if( msgs.length > 15 ) {
@@ -258,7 +189,7 @@ function write( ...args ) {
   console.log( msg );
   
 }
-
+//  //*********************************** // CONNECT_TO_SERVER // *************************************//
 function connect_to_server( opt, log ) {
 
 	let self = {
@@ -301,7 +232,7 @@ function connect_to_server( opt, log ) {
       } else {
   
         let msg = e.data;
-				let obj
+				let obj;
   
         try {
   
@@ -311,19 +242,42 @@ function connect_to_server( opt, log ) {
   
         if ( obj.cmd == "newData" ) {
   
-          state = obj.state
+          state = obj.state;
   
        } else if (obj.cmd == "trackingData") {
 
-        /*ws received, {"cmd":"trackingData","state":
-        {"hmd":{"pos":{"0":-0.31410789489746094,"1":1.6376476287841797,"2":0.4556894302368164},"quat":{"0":0.13929444551467896,"1":0.2569557726383209,"2":0.034140702337026596,"3":0.9557223320007324}},"trackers":[{"pos":{"0":0.9590294361114502,"1":1.911466121673584,"2":0.5492393970489502},"quat":{"0":-0.1990630030632019,"1":0.6774951219558716,"2":0.6710811257362366,"3":0.22588586807250977}},{"pos":{"0":1.086222529411316,"1":1.8866705894470215,"2":0.4619896411895752},"quat":{"0":-0.6431819200515747,"1":-0.2571682035923004,"2":-0.28171005845069885,"3":0.6639434695243835}}]}}*/
-          let lh = obj.state.trackers[0]
-          let rh = obj.state.trackers[1]
+        /*
+        ws received, {
+          "cmd":"trackingData","state":
+          {
+            "hmd":
+            {
+              "pos":{"0":-0.31410789489746094,"1":1.6376476287841797,"2":0.4556894302368164},
+              "quat":{"0":0.13929444551467896,"1":0.2569557726383209,"2":0.034140702337026596,"3":0.9557223320007324}
+            },
+            "trackers":[
+            {
+              "pos":{"0":0.9590294361114502,"1":1.911466121673584,"2":0.5492393970489502},
+              "quat":{"0":-0.1990630030632019,"1":0.6774951219558716,"2":0.6710811257362366,"3":0.22588586807250977}
+            },
+            {
+              "pos":{"0":1.086222529411316,"1":1.8866705894470215,"2":0.4619896411895752},
+              "quat":{"0":-0.6431819200515747,"1":-0.2571682035923004,"2":-0.28171005845069885,"3":0.6639434695243835}
+            }
+            ]
+          }
+         }
+        */
+          let lh = obj.state.trackers[0];
+          let rh = obj.state.trackers[1];
 
          // log(lh.pos[1])
 
           leftWrist.position.fromArray(lh.pos);
           rightWrist.position.fromArray(rh.pos);
+
+          leftWrist.quaternion.fromArray(lh.quat);
+          rightWrist.quaternion.fromArray(rh.quat);
           
 				} else {
           
@@ -374,7 +328,9 @@ function connect_to_server( opt, log ) {
 }
 
 
-//  //  INITIALIZATION  //  //  
+//  //************************************************************************************************// INITIALIZATION  //  //  
+//  //************************************************************************************************//
+//  //************************************************************************************************//
 
 function initialize() {
   
@@ -387,7 +343,7 @@ function initialize() {
   info.style.top = '10px';
   info.style.width = '100%';
   info.style.textAlign = 'center';
-  info.innerHTML = 'testing stuff';
+  info.innerHTML = 'HAND TRACKING';
   container.appendChild( info );
 
   //** add scene */
@@ -398,14 +354,22 @@ function initialize() {
   //gloves = new THREE.Group();
   //scene.add( gloves );
 
+  
+  user = new THREE.Group();
+  user.name = "user"
+  scene.add( user ); //room
+  
+
   //** add camera */
   camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.04, 10 );
-  camera.position.set( 0, 1.6, 2 );
+
   //** camera crosshairs | for intersections and to orientate sightline */
   crosshair = new THREE.Mesh( geometries[5], materials[3]  );
   camera.add( crosshair );
   //crosshair.position.z = - 1; //** keep crosshair slightly infront of you at all times */
+  //user.add( camera );
   scene.add( camera );
+  //user.add( camera );
 
   // controls = new THREE.OrbitControls(camera);
   // camera.lookAt(0,  - .5, 0);
@@ -413,7 +377,7 @@ function initialize() {
   let vec = new THREE.Vector3( 0, 0, -1 );
   vec.applyQuaternion( camera.quaternion );
   crosshair.position.copy( vec );
-  
+
   //** add lighting */
   scene.add( new THREE.HemisphereLight( 0x808080, 0x606060 ) );
   scene.add( new THREE.AmbientLight( 0x404040 ) ); //** soft white light */
@@ -436,8 +400,9 @@ function initialize() {
   //** add floor */
   floor = new THREE.Mesh( geometries[7], materials[5] );
   floor.rotation.x = - Math.PI / 2;
+  floor.name = "floor"
   floor.receiveShadow = true;
-  scene.add( floor );
+  scene.add(floor)
   
   //** add ray | used for casting lines from head + controllers to objects | used for intersecting */
   raycaster = new THREE.Raycaster();
@@ -460,60 +425,11 @@ function initialize() {
   leftWrist = new THREE.Mesh( geometries[1], materials[2] );
   rightWrist = new THREE.Mesh( geometries[1], materials[2] );
   
-  // leftWrist.position.set( 0, 1.3, + 0.1 ); // 0, 1.5, 0
-  // rightWrist.position.set( 0, 1.3, - 0.1 ); // 0.5, 1.5, -1
+  //leftWrist.position.set( 0, 1.3, + 0.1 ); // 0, 1.5, 0
+  //rightWrist.position.set( 0, 1.3, - 0.1 ); // 0.5, 1.5, -1
 
   leftWrist.add( new THREE.AxesHelper( 0.05 ) );
   rightWrist.add( new THREE.AxesHelper( 0.05 ) );
-
-  // Rotate an object around an arbitrary axis in object space
-var rotObjectMatrix;
-function rotateAroundObjectAxis(object, axis, radians) {
-    rotObjectMatrix = new THREE.Matrix4();
-    rotObjectMatrix.makeRotationAxis(axis.normalize(), radians);
-
-    // old code for Three.JS pre r54:
-    // object.matrix.multiplySelf(rotObjectMatrix);      // post-multiply
-    // new code for Three.JS r55+:
-    object.matrix.multiply(rotObjectMatrix);
-
-    // old code for Three.js pre r49:
-    // object.rotation.getRotationFromMatrix(object.matrix, object.scale);
-    // old code for Three.js r50-r58:
-    // object.rotation.setEulerFromRotationMatrix(object.matrix);
-    // new code for Three.js r59+:
-    object.rotation.setFromRotationMatrix(object.matrix);
-}
-
-var rotWorldMatrix;
-// Rotate an object around an arbitrary axis in world space       
-function rotateAroundWorldAxis(object, axis, radians) {
-    rotWorldMatrix = new THREE.Matrix4();
-    rotWorldMatrix.makeRotationAxis(axis.normalize(), radians);
-
-    // old code for Three.JS pre r54:
-    //  rotWorldMatrix.multiply(object.matrix);
-    // new code for Three.JS r55+:
-    rotWorldMatrix.multiply(object.matrix);                // pre-multiply
-
-    object.matrix = rotWorldMatrix;
-
-    // old code for Three.js pre r49:
-    // object.rotation.getRotationFromMatrix(object.matrix, object.scale);
-    // old code for Three.js pre r59:
-    // object.rotation.setEulerFromRotationMatrix(object.matrix);
-    // code for r59+:
-    object.rotation.setFromRotationMatrix(object.matrix);
-}
-var rotAxis = new THREE.Vector3(0,1,0);
-// rotateAroundWorldAxis(leftWrist, rotAxis, Math.PI / 180);
-// rotateAroundWorldAxis(rightWrist, rotAxis, Math.PI / 180);
-  //q.clone( leftWrist.normalize() );
-  //q.up( 0, 1, 0 );
-  // q.rotateOnWorldAxis( new THREE.Vector3( 0, 1, 0 ), - Math.PI / 2 );
-  // leftWrist.quaternion.premultiply( q );
-  // leftWrist.quaternion.multiply( q.inverse() ); 
-  //leftWrist.localToWorld( q. );
 
   //************************************//
   //        LHS  Forward  RHS           //
@@ -538,9 +454,16 @@ var rotAxis = new THREE.Vector3(0,1,0);
   leftWrist.name = "leftWrist"
   rightWrist.name = "rightWrist"
 
-  scene.add( leftWrist );
-  scene.add( rightWrist );
+  leftWrist.standingMatrix = renderer.vr.getStandingMatrix();
+  rightWrist.standingMatrix = renderer.vr.getStandingMatrix();
+
+  user.add( leftWrist );
+  user.add( rightWrist );
+
+  // scene.add( leftWrist );
+  // scene.add( rightWrist );
   // scene.add( wrist );
+
 
   //** left fingertips */
   for ( let i=0; i<5; i++ ) {
@@ -558,9 +481,9 @@ var rotAxis = new THREE.Vector3(0,1,0);
         // thumb
         switch( j ) {
 
-          case 0: joint.position.x = -0.02; joint.position.z = - 0.04; break;
-          case 1: joint.position.x = -0.025; break;
-          case 2: joint.position.x = -0.02; break;
+          case 0: joint.position.z = -0.02; joint.position.x = - 0.04; break;
+          case 1: joint.position.z = -0.025; break;
+          case 2: joint.position.z = -0.02; break;
         
         } // 0.06
 
@@ -569,42 +492,22 @@ var rotAxis = new THREE.Vector3(0,1,0);
         // fingers
         switch( j ) {
 
-          case 0: joint.position.x = -0.05; joint.position.z = ( - 2.5 + i ) *- 0.015; break;
-          case 1: joint.position.x = -0.03; break;
-          case 2: joint.position.x = -0.02; break;
+          case 0: joint.position.z = -0.05; joint.position.x = ( - 2.5 + i ) *- 0.015; break;
+          case 1: joint.position.z = -0.03; break;
+          case 2: joint.position.z = -0.02; break;
 
         } // 0.115
       }
 
-      reparentObject3D( joint, scene );
-      rotateAroundWorldAxis( joint, rotAxis, Math.PI / 2 );
-      //reparentObject3D( joint, parent );
+
       parent.add( joint );
       parent = joint;
       leftJoints[i][j] = joint;
       
-      joint.add( new THREE.AxesHelper( 0.02 ) );
+     //joint.add( new THREE.AxesHelper( 0.02 ) );
     
     }
   }
-
-  // let pivot = new THREE.Object3D();
-  // pivot.rotation.set( 0, 0, 0 );
-  // pivot.updateMatrixWorld();
-
-  // for ( var i in leftJoints ) {
-
-  //     THREE.SceneUtils.attach( leftJoints[ i ], scene, pivot );
-
-  // }
-  // //rotateAroundWorldAxis(pivot, rotAxis, Math.PI / 180);
-  // pivot.updateMatrixWorld();
-  // for ( var i in leftJoints ) {
-
-  //     cubes[ i ].updateMatrixWorld(); // if not done by the renderer
-  //     THREE.SceneUtils.detach( leftJoints[ i ], pivot, scene );
-
-  // }
 
   //** right fingertips */
   for ( let i=0; i<5; i++ ) {
@@ -622,9 +525,9 @@ var rotAxis = new THREE.Vector3(0,1,0);
         // thumb
         switch( j ) {
 
-          case 0: joint.position.x = -0.02; joint.position.z = + 0.04; break;
-          case 1: joint.position.x = -0.025; break;
-          case 2: joint.position.x = -0.02; break;
+          case 0: joint.position.z = -0.02; joint.position.x = + 0.04; break;
+          case 1: joint.position.z = -0.025; break;
+          case 2: joint.position.z = -0.02; break;
         
         } // 0.06
 
@@ -633,9 +536,9 @@ var rotAxis = new THREE.Vector3(0,1,0);
         // fingers
         switch( j ) {
 
-          case 0: joint.position.x = -0.05; joint.position.z = ( 2.5 - i ) *+ 0.015; break;
-          case 1: joint.position.x = -0.03; break;
-          case 2: joint.position.x = -0.02; break;
+          case 0: joint.position.z = -0.05; joint.position.x = ( 2.5 - i ) *+ 0.015; break;
+          case 1: joint.position.z = -0.03; break;
+          case 2: joint.position.z = -0.02; break;
 
         } // 0.115
       }
@@ -644,12 +547,12 @@ var rotAxis = new THREE.Vector3(0,1,0);
       parent = joint;
       rightJoints[i][j] = joint;
       
-      joint.add( new THREE.AxesHelper( 0.02 ) );
+      //joint.add( new THREE.AxesHelper( 0.02 ) );
     
     }
   }
 
-  //** add controllers | hands | trackers */
+  //  ** add controllers | hands | trackers */
   leftHandControl = renderer.vr.getController( 0 );
   leftHandControl.addEventListener( 'selectstart', onSelectStart );
   leftHandControl.addEventListener( 'selectend', onSelectEnd );
@@ -667,14 +570,16 @@ var rotAxis = new THREE.Vector3(0,1,0);
   leftHandControl.add( line.clone() );
   rightHandControl.add( line.clone() );
 
-  // leftHand.add( new THREE.AxesHelper( 0.05 ) );  
-  // palm.add( new THREE.AxesHelper( 0.05 ) );
   scene.add( new THREE.AxesHelper( 1 ) );
 
+
   //** add event listeners  */
+  window.addEventListener( 'resize', onWindowResize, false );
+  //window.addEventListener('vrdisplayactivate', onVRRequestPresent, false);
+	//window.addEventListener('vrdisplaydeactivate', onVRExitPresent, false);
   // window.addEventListener( 'vrdisplaypointerrestricted', onPointerRestricted, false );
   // window.addEventListener( 'vrdisplaypointerunrestricted', onPointerUnrestricted, false );
-  window.addEventListener( 'resize', onWindowResize, false );
+
 
   // //** 3D BOIDS */
   // flock = new THREE.Group();
@@ -689,8 +594,11 @@ var rotAxis = new THREE.Vector3(0,1,0);
 }
 
 
-//  //  INTERSECTIONS  //  //
+//  //************************************************************************************************// INTERSECTIONS  //  // 
+//  //************************************************************************************************//
+//  //************************************************************************************************//
 
+//  //*************************************** // CLEAN // ********************************************//
 function cleanIntersected() {
 
   while ( intersections.length ) {
@@ -702,6 +610,7 @@ function cleanIntersected() {
 
 }
 
+//  //********************************** // SELECT START // ******************************************//
 function onSelectStart( event ) {
 
   let handAction = event.target;
@@ -725,6 +634,7 @@ function onSelectStart( event ) {
 
 }
 
+//  //************************************ // SELECT END // ******************************************//
 function onSelectEnd( event ) {
 
   let handAction = event.target;
@@ -744,6 +654,7 @@ function onSelectEnd( event ) {
 
 }
 
+//  //******************************** // GET INTERSECTIONS // ***************************************//
 function getIntersections( handAction ) {
 
   tempMatrix.identity().extractRotation( handAction.matrixWorld );
@@ -755,6 +666,7 @@ function getIntersections( handAction ) {
 
 }
 
+//  //********************************* // INTERSECT OBJECT // ***************************************//
 function intersectObjects( handAction ) {
 
   //* Do not highlight when already selected */
@@ -783,6 +695,7 @@ function intersectObjects( handAction ) {
 
 }
 
+//  //********************************** // INTERSECT HEAD // ****************************************//
 function intersectHead() {
   
   raycaster.setFromCamera( { x: 0, y: 0 }, camera );
@@ -797,7 +710,7 @@ function intersectHead() {
       intersected = intersects[ 0 ].object;
       intersected.currentHex = intersected.material.emissive.getHex();
       intersected.material.emissive.setHex( 0xff0000 );
-      //intersected.rotation.y += 0.5;
+      // intersected.rotation.y += 0.5;
       // intersected.position.z -= 0.1;
 
     }
@@ -812,6 +725,7 @@ function intersectHead() {
   
 }
 
+//  //************************************ // CHECK ROOM // ******************************************//
 function checkRoom() {
   
   for ( let i = 0; i < room.children.length; i ++ ) {
@@ -839,7 +753,10 @@ function checkRoom() {
   } 
 }
 
-//  // 3D BOIDS //  //
+
+//  //************************************************************************************************// 3D BOIDS //  //
+//  //************************************************************************************************// 
+//  //************************************************************************************************// 
 
 // function checkBoids( range ) {
   
@@ -873,7 +790,9 @@ function checkRoom() {
 // }
 
 
-//  UPDATE VR WORLD  //  //
+//  //************************************************************************************************/ 
+//  //************************************************************************************************/  UPDATE VR WORLD  //  //
+//  //************************************************************************************************/ 
 
 function onWindowResize() {
 
@@ -907,13 +826,13 @@ function render() {
 	//** [1] SOURCE_FILTERED_DEFAULT - RH */
 	//** [2] SOURCE_DEVICEDATA - LH */
   //** [3] SOURCE_DEVICEDATA - RH */
-  let deviceID = Object.keys(state.devices).sort()[2]; // just to indicate we are streaming something
-  let hand = state.devices[deviceID];
-  state_div.innerText = JSON.stringify(hand, null, "  ");
+  let deviceID = Object.keys( state.devices ).sort()[2]; // just to indicate we are streaming something
+  let hand = state.devices[ deviceID ];
+  state_div.innerText = JSON.stringify( hand, null, "  " );
   
   //** coordinate flip due to differences in definitions of wxyz order */ 
-  getHandsL( Object.keys(state.devices).sort()[2]); // left
-  getHandsR( Object.keys(state.devices).sort()[3]); // right
+  getHandsL( Object.keys( state.devices ).sort()[2]); // left
+  getHandsR( Object.keys( state.devices ).sort()[3]); // right
 
   //** manage intersections */
   cleanIntersected();
@@ -930,8 +849,21 @@ function render() {
   //let range = 3 - radius;
   //let range = 5 - radius;
 
- //scene.updateMatrixWorld();
-
+  //scene.updateMatrixWorld();
+   
+  let invertStage = new THREE.Matrix4()
+  let temp = new THREE.Matrix4();
+  let vrDisplay = renderer.vr.getDevice()
+  if (vrDisplay) {
+    temp.fromArray( vrDisplay.stageParameters.sittingToStandingTransform )
+   // invertStage.getInverse( temp, true );
+    //temp.getInverse( temp )
+    //console.log(temp)
+    //user.position.set(invertStage[12])
+    user.position.fromArray(temp.elements, 12)
+   // scene.position.fromArray(temp.elements, 12);
+  
+  } 
   renderer.render( scene, camera );
 
 }

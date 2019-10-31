@@ -59,7 +59,8 @@ function getTrackingData() {
 
 	}
 	
-	console.log(trackingstate.trackers[0].pos[1], trackingstate.hmd.pos[1])
+// trackingstate console info
+	//console.log(trackingstate.trackers[0].pos[1], trackingstate.hmd.pos[1])
 
   //console.log(state)
   return trackingstate;
