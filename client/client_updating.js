@@ -29,7 +29,7 @@ let state_div = document.getElementById( "state" );
 let msgs = [];
 
 let container;
-let camera, scene, renderer, controls, user; 
+let camera, scene, renderer, controls, user, L, R, LH, LR; 
 
 let crosshair, 
     raycaster, 
@@ -39,8 +39,10 @@ let crosshair,
 
 let tempMatrix = new THREE.Matrix4();
 let rotationMatrix = new THREE.Matrix4();
-let leftWristMatrix = new THREE.Matrix4();
-let rightWristMatrix = new THREE.Matrix4();
+let leftWristQuat = new THREE.Quaternion();
+let rightWristQuat = new THREE.Quaternion();
+
+let rot90 = new THREE.Quaternion();
 
 let tempQuaternion = new THREE.Quaternion();
 let targetRotation = new THREE.Quaternion();
@@ -76,7 +78,7 @@ let geometries = [
 let materials = [
   // [0] boids
   new THREE.MeshLambertMaterial( {
-    color: 0x9a799c
+    color: 0x010101//0x191919 //0x9a799c
   } ),
   // [1] wrist, palm, joints
   new THREE.MeshStandardMaterial( {
@@ -123,9 +125,22 @@ let vrDisplay, frameData;
 let rightEye, leftEye;
 
 
+let starTexture = new THREE.TextureLoader().load( "sparkle_cut.png" );
+let stars = [];
+let lightness = 0;
+let rotSpeed = 0.01;
+
+
 //  //************************************************************************************************// UPDATE WORLD FUNCTIONS //  //
 //  //************************************************************************************************//
 //  //************************************************************************************************//
+
+function getRandom() {
+  // source: https://stackoverflow.com/questions/13455042/random-number-between-negative-and-positive-value
+  let num = Math.floor(Math.random()*10) + 1; // this will get a number between 1 and x;
+  num *= Math.floor(Math.random()*2) == 1 ? 1 : -1; // this will add minus sign in 50% of cases
+  return num;
+}
 
 function threeQuatFromManusQuat( q, arr, offset=0 ) {
   //** swap quaternion differences */
@@ -139,7 +154,7 @@ function threeQuatFromManusQuat( q, arr, offset=0 ) {
 
 function getHandsL( hands ) {
   h = state.devices[hands];
-  threeQuatFromManusQuat( leftWrist.quaternion, h.wristOrientation );
+  //threeQuatFromManusQuat( leftWrist.quaternion, h.wristOrientation );
   for ( let i=0; i<5; i++ ) {
     for ( let j=0; j<3; j++ ) {
        threeQuatFromManusQuat( leftJoints[i][j].quaternion, h.jointOrientations, 20 * i + 4 *( j + 1 ) );
@@ -149,7 +164,7 @@ function getHandsL( hands ) {
 
 function getHandsR( hands ) {
   h = state.devices[hands];
-  threeQuatFromManusQuat( rightWrist.quaternion, h.wristOrientation );
+  //threeQuatFromManusQuat( rightWrist.quaternion, h.wristOrientation );
   for ( let i=0; i<5; i++ ) {
     for ( let j=0; j<3; j++ ) {
         threeQuatFromManusQuat( rightJoints[i][j].quaternion, h.jointOrientations, 20 * i + 4 *( j + 1 ) );
@@ -276,8 +291,32 @@ function connect_to_server( opt, log ) {
           leftWrist.position.fromArray(lh.pos);
           rightWrist.position.fromArray(rh.pos);
 
+          // apply 90 rot 
+          // [sq(.5)]  [0]       [0]       [sq(.5)] //** +90 around X : CW    */
+         
+
+          rot90.set( Math.sqrt(0.5), 0, 0, Math.sqrt(0.5) );
+
+          rot90.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), Math.PI / 2 );
+
+          //leftWristQuat.fromArray(lh.quat);
+         //rightWristQuat.fromArray(rh.quat);
+          
+          // L = leftWristQuat.angleTo(rot90)
+          // R = leftWristQuat.angleTo(rot90)
+
+          //  leftWristQuat.slerp(rot90, 1)
+          // //rightWristQuat.slerp(rot90, 1)
+
+          // leftWrist.quaternion.copy(leftWristQuat);
+          // rightWrist.quaternion.copy(rightWristQuat);
+          //leftWrist.quaternion.slerp( rot90, 1 );
+          //rightWrist.quaternion.slerp( rot90, 1 );
+
           leftWrist.quaternion.fromArray(lh.quat);
           rightWrist.quaternion.fromArray(rh.quat);
+          leftWrist.quaternion.multiplyQuaternions(leftWrist.quaternion, rot90);
+          rightWrist.quaternion.multiplyQuaternions(rightWrist.quaternion, rot90);
           
 				} else {
           
@@ -348,9 +387,27 @@ function initialize() {
 
   //** add scene */
   scene = new THREE.Scene();
-  scene.background = new THREE.Color( 0x808080 );
-  //scene.fog	= new THREE.FogExp2( 0xdde0f0, 0.0025 );
+  scene.background = new THREE.Color( 0x000000  ); //0x808080
+  //scene.fog = new THREE.Fog( 0x000000, 0.5, 6 ); //0xefd1b5
+  //scene.fog	= new THREE.FogExp2( 0x000000, 0.25 );
+
+  for (let i = 0; i < 300; i++) {
+    let geometry = new THREE.SphereGeometry( 0.05, 8, 6 );
+    let material = new THREE.MeshBasicMaterial( { map: starTexture } );
+    let star = new THREE.Mesh( geometry, material );
+    // let y = getRandom();
+    // y *= y;
+    // y = Math.sqrt( y );
+    star.position.set( getRandom(), getRandom(), getRandom() );
+    star.material.side = THREE.DoubleSide;
+    stars.push( star );
+  }
   
+  for (let j = 0; j < stars.length; j++) {
+    scene.add( stars[j] );
+  }
+
+
   //gloves = new THREE.Group();
   //scene.add( gloves );
 
@@ -364,8 +421,8 @@ function initialize() {
   camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.04, 10 );
 
   //** camera crosshairs | for intersections and to orientate sightline */
-  crosshair = new THREE.Mesh( geometries[5], materials[3]  );
-  camera.add( crosshair );
+  crosshair = new THREE.Mesh( geometries[5], materials[3] );
+  //camera.add( crosshair );
   //crosshair.position.z = - 1; //** keep crosshair slightly infront of you at all times */
   //user.add( camera );
   scene.add( camera );
@@ -395,15 +452,18 @@ function initialize() {
   room = new THREE.LineSegments( geometries[6], materials[4] );
   room.name = "room"
   room.position.set( 0, 0, 0 );
-  scene.add( room );
+  //scene.add( room );
   
   //** add floor */
-  floor = new THREE.Mesh( geometries[7], materials[5] );
+  //floor = new THREE.Mesh( geometries[7], materials[5] );
+  floor = new THREE.Mesh( geometries[7],  materials[0] )
   floor.rotation.x = - Math.PI / 2;
   floor.name = "floor"
   floor.receiveShadow = true;
+  floor.add( new THREE.PointLight( 0xff0040, 2, 50 ) );
   scene.add(floor)
   
+
   //** add ray | used for casting lines from head + controllers to objects | used for intersecting */
   raycaster = new THREE.Raycaster();
   
@@ -454,8 +514,8 @@ function initialize() {
   leftWrist.name = "leftWrist"
   rightWrist.name = "rightWrist"
 
-  leftWrist.standingMatrix = renderer.vr.getStandingMatrix();
-  rightWrist.standingMatrix = renderer.vr.getStandingMatrix();
+  //leftWrist.standingMatrix = renderer.vr.getStandingMatrix();
+  //rightWrist.standingMatrix = renderer.vr.getStandingMatrix();
 
   user.add( leftWrist );
   user.add( rightWrist );
@@ -463,6 +523,8 @@ function initialize() {
   // scene.add( leftWrist );
   // scene.add( rightWrist );
   // scene.add( wrist );
+
+  let palm_length = -0.05;
 
 
   //** left fingertips */
@@ -481,7 +543,7 @@ function initialize() {
         // thumb
         switch( j ) {
 
-          case 0: joint.position.z = -0.02; joint.position.x = - 0.04; break;
+          case 0: joint.position.z = palm_length-0.02; joint.position.x = -0.04; break;
           case 1: joint.position.z = -0.025; break;
           case 2: joint.position.z = -0.02; break;
         
@@ -492,7 +554,7 @@ function initialize() {
         // fingers
         switch( j ) {
 
-          case 0: joint.position.z = -0.05; joint.position.x = ( - 2.5 + i ) *- 0.015; break;
+          case 0: joint.position.z = palm_length-0.05; joint.position.x = ( - 2.5 + i ) * 0.015; break;
           case 1: joint.position.z = -0.03; break;
           case 2: joint.position.z = -0.02; break;
 
@@ -525,7 +587,7 @@ function initialize() {
         // thumb
         switch( j ) {
 
-          case 0: joint.position.z = -0.02; joint.position.x = + 0.04; break;
+          case 0: joint.position.z = palm_length-0.02; joint.position.x = +0.04; break;
           case 1: joint.position.z = -0.025; break;
           case 2: joint.position.z = -0.02; break;
         
@@ -536,7 +598,7 @@ function initialize() {
         // fingers
         switch( j ) {
 
-          case 0: joint.position.z = -0.05; joint.position.x = ( 2.5 - i ) *+ 0.015; break;
+          case 0: joint.position.z = palm_length-0.05; joint.position.x = ( 2.5 - i ) *-0.015; break;
           case 1: joint.position.z = -0.03; break;
           case 2: joint.position.z = -0.02; break;
 
@@ -570,7 +632,7 @@ function initialize() {
   leftHandControl.add( line.clone() );
   rightHandControl.add( line.clone() );
 
-  scene.add( new THREE.AxesHelper( 1 ) );
+  //scene.add( new THREE.AxesHelper( 1 ) );
 
 
   //** add event listeners  */
@@ -699,7 +761,7 @@ function intersectObjects( handAction ) {
 function intersectHead() {
   
   raycaster.setFromCamera( { x: 0, y: 0 }, camera );
-  let intersects = raycaster.intersectObjects( room.children );
+  let intersects = raycaster.intersectObjects( user.children );
   
   if ( intersects.length > 0 ) {
     
@@ -850,7 +912,16 @@ function render() {
   //let range = 5 - radius;
 
   //scene.updateMatrixWorld();
-   
+  
+  for (let k = 0; k < stars.length; k++) {
+    let star = stars[k];
+    star.rotation.x += 0.01*k/100;
+    star.rotation.y += 0.01*k/100;
+    //star.rotation.z += 0.001*k;
+    lightness > 100 ? lightness = 0 : lightness+=1; //++
+    star.material.color = new THREE.Color("hsl(255, 100%, " + lightness + "%)");
+  } 
+
   let invertStage = new THREE.Matrix4()
   let temp = new THREE.Matrix4();
   let vrDisplay = renderer.vr.getDevice()
