@@ -1,135 +1,195 @@
+function Creature() {
+  this.position = new THREE.Vector3();
+  this.velocity = new THREE.Vector3();
+  this.acceleration = new THREE.Vector3();
 
-export default class Creature extends THREE.Group {
+  this.r = 12;
+  this.maxspeed = 1;
+  this.maxforce = 0.2;
 
-  static MAX_SPEED = 5/1.2;
-  static MAX_FORCE = .1;
-  static separationDistance = 5;
-  static cohesionDistance = 10;
-  static alignmentDistance = 7;
+  var geometry = new THREE.SphereGeometry(1,10,10);
+  var material = new THREE.MeshToonMaterial({ color: 0xffffff, opacity:0.5, transparent:true, wireframe:true, emissive: 0xffffff,emissiveIntensity:0.1} );
+  var sphere = new THREE.Mesh(geometry, material);
+  boid.add(sphere);
 
-  constructor( geometry = new THREE.ConeGeometry( 0.01, 0.02, 3 ) ) {
-
-    super();
-
-    this.for = new THREE.Vector3();
-    this.acc = new THREE.Vector3();
-    this.vel = new THREE.Vector3();
-    // this.pos = new THREE.Vector3();
-
-    this.rot = new THREE.Euler();
-    this.dir = new THREE.Vector3();
-    
-    this.col = new THREE.Vector3();
-        
-    this.agent = new THREE.Mesh( geometry, new THREE.MeshLambertMaterial( {
-      color: new THREE.Color().setHSL( Math.random() * 0.7, 0.75, 0.75 )
-    } ) );
-    this.add( this.agent )
-
-    this.sharkFlag = false;
-    
+  this.initialise = function() {
+      
+      this.position.x = Math.random()*25;
+      this.position.y = Math.random()*10;
+      this.position.z = Math.random()*10;
+      this.velocity.x = 0.1;
+      this.velocity.y = 0.1;
+      this.velocity.z = 0.1;
+      this.acceleration.x = 0.0;
+      this.acceleration.y = 0.0;
+      this.acceleration.z = 0.0;
+      this.mass = 1000;
+      // console.log('Initialise', this.position);                    
   }
 
-  update( boids ){
-
-    //** separation */
-    {
-
-      for ( let i = 0; i < boids.length; i++ ) {
-
-        let dist = this.position.distanceTo( boids[ i ].position )
-        // debugger
-        if ( dist > .0001 && dist < Creature.separationDistance * .5 && boids[i] != this ) {
-  
-          this.acc.sub(
-            boids[i].position.clone().sub( this.position ).normalize()
-            .multiplyScalar( Creature.MAX_SPEED )
-            .sub( this.vel ).multiplyScalar( 1 )
-          );
-
-        }
-
-      }
-
-    }
-
-    //** alignment */
-    {
-
-      let count = 0;
-      let sum = new THREE.Vector3();
-      
-      for ( let i = 0; i < boids.length; i++ ) {
-
-        let dist = this.position.distanceTo(  boids[i].position );
-        if( dist > .0001 && dist < Creature.alignmentDistance && boids[i] != this ) {
-          sum.add( boids[i].vel );
-          ++count;
-        }
-      
-      }
-
-      if ( count > 0 ) {
-
-        sum.divideScalar( count ).normalize();
-        sum.multiplyScalar( Creature.MAX_SPEED );
-        this.acc.add( sum.sub( this.vel ) );
-      
-      } 
-
-    }
-
-    //** cohesion */
-    {
-
-      let count = 0;
-      let sum = new THREE.Vector3();
-      
-      for ( let i = 0; i < boids.length; i++ ) {
-        
-        let dist = this.position.distanceTo( boids[i].position );
-        // this.mesh.position.angleTo(search[i].position) > Math.PI
-        let d = this.sharkFlag ? Creature.cohesionDistance * 1 : Creature.cohesionDistance * 2;
-        
-        if ( dist > .0001 && dist < d && boids[i] != this ) {
-        
-          sum.add( boids[i].position );
-          ++count;
-        
-        }
-          
-      }
-     
-      if ( count > 0 ) {
-        
-        sum.divideScalar( count );
-
-        this.acc.add(
-          sum.clone().sub( this.position ).normalize()
-          .multiplyScalar( Creature.MAX_SPEED )
-          .sub( this.vel ).multiplyScalar( 1 )
-        )
-      }
-      
-    }
-
-    this.acc.clampLength( .01, Creature.MAX_FORCE )
-    this.vel.clampLength( .01, Creature.MAX_SPEED )
-   
-    this.vel.add( this.acc );
-    this.position.add( this.vel );
-    this.acc.add(
-      this.target.clone().sub( this.position ).normalize()
-      .multiplyScalar( Creature.MAX_SPEED )
-      .sub( this.vel ).multiplyScalar( 1 )
-    );
-
-    this.rot.setFromQuaternion(
-      new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3( 0, 1, 0 ), new THREE.Vector3( this.vel.x, this.vel.y, this.vel.z ).normalize() )
-    );
-    
-    this.rotation.copy( new THREE.Euler( this.rot.x, this.rot.y, this.rot.z ) );
-  
+  this.flock = function(Creatures) {
+      var sep = this.separate(Creatures);   // Separation
+      var ali = this.align(Creatures);      // Alignment
+      var coh = this.cohesion(Creatures);   // Cohesion
+      // Arbitrarily weight these forces
+      sep.multiplyScalar(1.5);
+      ali.multiplyScalar(1.0);
+      coh.multiplyScalar(1.0);
+      // Add the force vectors to acceleration
+      this.applyForce(sep);
+      this.applyForce(ali);
+      this.applyForce(coh);
   };
 
-};
+
+  this.applyForce = function(force){
+      var f = force.divideScalar(this.mass);
+      this.acceleration.add(f);
+  }
+
+  this.separate = function(Creatures) {
+      var desiredseparation = 20;
+      var steer = new THREE.Vector3();
+      var count = 0;
+      // For every boid in the system, check if it's too close
+      for (var i = 0; i < Creatures.length; i++) {
+          var d = this.position.distanceTo(Creatures[i].position);
+          // If the distance is greater than 0 and less than an arbitrary amount (0 when you are yourself)
+          if ((d > 0) && (d < desiredseparation)) {
+              // Calculate vector pointing away from neighbor
+              var pos = this.position.clone();
+              var diff = pos.sub(Creatures[i].position);
+              diff.normalize();
+              diff.divideScalar(d);        // Weight by distance
+              steer.add(diff);
+              count++;            // Keep track of how many
+          }
+      }
+      // Average -- divide by how many
+      if (count > 0) {
+          steer.divideScalar(count);
+      }
+
+      if (steer.length > 0){
+          // Our desired vector is the average scaled to maximum speed
+          steer.normalize();
+          steer.multiplyScalar(this.maxspeed);
+          // Implement Reynolds: Steering = Desired - Velocity
+          steer.sub(this.velocity);
+          // sum.limit(this.maxforce);
+      }
+      return steer;
+  };
+
+  // Alignment
+  // For every nearby boid in the system, calculate the average velocity
+  this.align = function(Creatures) {
+      var neighbordist = 8;
+      var alignsteer = new THREE.Vector3();
+      var count = 0;
+      for (var i = 0; i < Creatures.length; i++) {
+          var d = this.position.distanceTo(Creatures[i].position);
+          if ((d > 0) && (d < neighbordist)) {
+          alignsteer.add(Creatures[i].velocity);
+          count++;
+          }
+      }
+      if (count > 0) {
+          alignsteer.divideScalar(count);
+          alignsteer.normalize();
+          alignsteer.multiplyScalar(this.maxspeed);
+          var steer = alignsteer.sub(this.velocity);
+          // steer.limit(this.maxforce);
+          return steer;
+      } else {
+          return new THREE.Vector3();   
+      }
+  };
+
+  // Cohesion
+  // For the average location (i.e. center) of all nearby boids, calculate steering vector towards that location
+  this.cohesion = function(Creatures) {
+      var neighbordist = 3;
+      var cohesionsteer = new THREE.Vector3();   
+      var count = 0;
+      for (var i = 0; i < Creatures.length; i++) {
+          var d = this.position.distanceTo(Creatures[i].position);
+          if ((d > 0) && (d < neighbordist)) {
+              cohesionsteer.add(Creatures[i].position); // Add location
+              count++;
+          }
+      }
+      if (count > 0) {
+          cohesionsteer.divideScalar(count);
+          return this.seek(cohesionsteer);  // Steer towards the location
+      } else {
+          return new THREE.Vector3();
+      }
+  };
+
+  this.seek = function(target) {
+      var tgt = target.clone();
+      var desired = tgt.sub(this.position);  // A vector pointing from the location to the target
+
+      // Normalize desired and scale to maximum speed
+      desired.normalize();
+      desired.multiplyScalar(this.maxspeed);
+      des = desired.clone();
+      // Steering = Desired minus velocity
+      var steer = des.sub(this.velocity);
+      // steer.limit(this.maxforce);  // Limit to maximum steering force
+      return steer;
+  };
+
+
+  this.update = function() {
+      
+      this.velocity.add(this.acceleration);
+      // this.velocity.clamp(this.min, this.max);
+      this.position.add(this.velocity);
+      this.acceleration.multiplyScalar(0);
+      // console.log('Position', this.position);
+
+  }
+
+  this.display = function(){
+      sphere.position.x = this.position.x;
+      sphere.position.y = this.position.y;
+      // console.log(sphere.position);
+
+  }
+
+  this.checkEdges = function() {
+      if (this.position.x > 50){
+          this.position.x = 50;
+          this.velocity.x *= -1;
+          // console.log(this.velocity);
+
+      }
+      else if (this.position.x < 0){
+          this.position.x = 0;
+          this.velocity.x *= -1;
+          // console.log('HIT');
+
+      }
+
+      if (this.position.y > 50){
+          this.position.y = 50;
+          this.velocity.y *= -1;
+      }
+      else if (this.position.y < 0){
+          this.position.y = 0;
+          this.velocity.y *= -1;
+      }     
+
+      if (this.position.z > 50){
+          this.position.z = 50;
+          this.velocity.z *= -1;
+      }
+      else if (this.position.z < 0){
+          this.position.z = 0;
+          this.velocity.z *= -1;
+      }                   
+
+  }
+}

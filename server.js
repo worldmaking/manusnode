@@ -25,7 +25,6 @@ let trackingstate = {
 
 const tmpmat = mat4.create();
 
-
 try {
   openvr.init(0);
 } catch(e) {

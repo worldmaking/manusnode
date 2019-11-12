@@ -20,6 +20,8 @@
 //  //************************************************************************************************//
 //  //************************************************************************************************//
 
+//let Creature = require('./js/Creature.js');
+
 const UNITVECTOR_X = new THREE.Vector3(1,0,0);
 const UNITVECTOR_Y = new THREE.Vector3(0,1,0);
 const UNITVECTOR_Z = new THREE.Vector3(0,0,1);
@@ -43,6 +45,9 @@ let leftWristQuat = new THREE.Quaternion();
 let rightWristQuat = new THREE.Quaternion();
 
 let rot90 = new THREE.Quaternion();
+let rot180 = new THREE.Quaternion();
+let rotZ180 = new THREE.Quaternion();
+let rotY90 = new THREE.Quaternion();
 
 let tempQuaternion = new THREE.Quaternion();
 let targetRotation = new THREE.Quaternion();
@@ -64,21 +69,24 @@ let leftWrist,
     rightJoints = [];
 
 let geometries = [
-  new THREE.ConeGeometry( 0.01, 0.05, 32 ), // [0] boids //0.01 0.02
-  new THREE.TorusGeometry( 0.03, 0.01, 16, 100 ), // [1] wrist
+  new THREE.ConeGeometry( 0.01, 0.05, 32 ), // [0] boids //0.01 0.02 // 0.01 0.05
+  new THREE.TorusGeometry( 0.025, 0.005, 16, 100 ), // [1] wrist
   new THREE.BoxGeometry( 0.06, 0.01, 0.07 ), // [2] palm
   new THREE.BoxGeometry( 0.01, 0.01, 0.01 ), // [3] joints
   new THREE.TorusGeometry( 0.01, 0.001, 16, 100 ), // [4] fingertips
   new THREE.RingBufferGeometry( 0.02, 0.04, 32 ), // [5] crosshair
   new THREE.BoxLineGeometry( 10, 10, 10, 10, 10, 10 ), // [6] room
   new THREE.PlaneBufferGeometry( 10, 10 ), // [7] floor
-  new THREE.BufferGeometry().setFromPoints( [ new THREE.Vector3( 0, 0, 0 ), new THREE.Vector3( 0, 0, - 1 ) ] ) // [8] raycaster
+  new THREE.BufferGeometry().setFromPoints( [ new THREE.Vector3( 0, 0, 0 ), new THREE.Vector3( 0, 0, - 1 ) ] ), // [8] raycaster
+  new THREE.CylinderGeometry( 0.01, 0.005, 0.025, 0, true), //[9] fingertip
+  new THREE.SphereGeometry( 0.01, 7, 2, 0, 6.3, 0, 1.5 ), //[10]
+  new THREE.TetrahedronGeometry( 7, 2 ) //[11]
 ];
 
 let materials = [
   // [0] boids
   new THREE.MeshLambertMaterial( {
-    color: 0x010101//0x191919 //0x9a799c
+    color: 0x9a799c//0x191919 //0x9a799c //0x101010
   } ),
   // [1] wrist, palm, joints
   new THREE.MeshStandardMaterial( {
@@ -87,11 +95,13 @@ let materials = [
   // [2] fingertips 
   new THREE.MeshToonMaterial ( {
     color: 0x166d99
+    //transparent: true,
+    //opacity: 0.5
   } ),
   // [3] crosshair
   new THREE.MeshBasicMaterial( {
     color: 0xffffff,
-    opacity: 1,
+    opacity: 0, //1
     transparent: true
   } ),
   // [4] room 
@@ -100,10 +110,28 @@ let materials = [
   } ),
   // [5] floor 
   new THREE.MeshStandardMaterial( {
-    color: 0x202020,
+    color: 0xffc30a,
     roughness: 1.0,
-    metalness: 0.0
-  } ) 
+    metalness: 0.5
+  } ),
+  // [6] new floor
+  new THREE.MeshLambertMaterial( {
+    color: 0x101010//0x191919 //0x9a799c //0x101010
+  } ),
+  // [7] fingertips 
+  new THREE.MeshToonMaterial ( {
+    color: 0x160099
+  } ),
+  // [8] fingertips 
+  new THREE.MeshToonMaterial ( {
+    color: 0x166d00
+  } ),
+  // [9] fingertips 
+  new THREE.MeshToonMaterial ( {
+    color: 0x006d99,
+    transparent: true,
+    opacity: 0
+  } ),
 ];
 
 let state = null;
@@ -111,22 +139,26 @@ let state = null;
 let sock;
 
 //** 3D BOIDS */
-let flock;
-let radius = 0.2;
+let boids = new THREE.Group();
+//let Creature;
+let boundary = 7;
 let clock = new THREE.Clock();
-let boids = [];
+let flocks;
 let axis = new THREE.Vector3();
 let radians;
-
+let Creatures = [];
+let wind = new THREE.Vector3(0.05,0.0,0.0);
+let gravity = new THREE.Vector3(0.0,0.1,0);
 
 // VR STUFF
 let isInVR = false;
 let vrDisplay, frameData;
 let rightEye, leftEye;
 
-
+// STAR STUFF
 let starTexture = new THREE.TextureLoader().load( "sparkle_cut.png" );
 let stars = [];
+let starGroup = new THREE.Group();
 let lightness = 0;
 let rotSpeed = 0.01;
 
@@ -135,9 +167,11 @@ let rotSpeed = 0.01;
 //  //************************************************************************************************//
 //  //************************************************************************************************//
 
-function getRandom() {
+function getRandom(Min, Max) {
   // source: https://stackoverflow.com/questions/13455042/random-number-between-negative-and-positive-value
-  let num = Math.floor(Math.random()*10) + 1; // this will get a number between 1 and x;
+  let min = Min;
+  let max = Max
+  let num = Math.floor(Math.random()*max) + min; // this will get a number between min/1/0 and max;
   num *= Math.floor(Math.random()*2) == 1 ? 1 : -1; // this will add minus sign in 50% of cases
   return num;
 }
@@ -149,7 +183,11 @@ function threeQuatFromManusQuat( q, arr, offset=0 ) {
   //** Manus: [z->x]<		  [y]^      [x->z]v	  	[w=>0]  */
   //** Manus: [-z]->>     [y] 	    [x]v      	[w=>0]  */
 	//** Three: [x]> 			  [y]^ 	  	[z]v   			[w]     */
-  q.set( -arr[ offset + 3 ], arr[ offset + 2 ], arr[ offset + 1 ], arr[ offset + 0 ] );
+  q.set( arr[ offset + 3 ], arr[ offset + 2 ], arr[ offset + 1 ], arr[ offset + 0 ] );
+}
+
+function threeQuatFromManusQuatTHUMB( q, arr, offset=0 ) {
+  q.set( arr[ offset + 3 ], arr[ offset + 2 ], arr[ offset + 1 ], arr[ offset + 0 ] );
 }
 
 function getHandsL( hands ) {
@@ -157,17 +195,47 @@ function getHandsL( hands ) {
   //threeQuatFromManusQuat( leftWrist.quaternion, h.wristOrientation );
   for ( let i=0; i<5; i++ ) {
     for ( let j=0; j<3; j++ ) {
-       threeQuatFromManusQuat( leftJoints[i][j].quaternion, h.jointOrientations, 20 * i + 4 *( j + 1 ) );
-     }
-   }
+      if ( i == 0 ) {
+        threeQuatFromManusQuat( leftJoints[i][j].quaternion, h.jointOrientations, 20 * i + 4 *( j + 1 ) );
+        //leftJoints[i][j].quaternion.multiplyQuaternions( leftJoints[i][j].quaternion, rot90 );   
+      } else {
+        threeQuatFromManusQuat( leftJoints[i][j].quaternion, h.jointOrientations, 20 * i + 4 *( j + 1 ) );
+        let rot = new THREE.Quaternion();
+        rot.set( Math.sqrt(0.5), 0, 0, Math.sqrt(0.5) );
+        //rot.set( 0, 0, 1, 0 );
+        rot.setFromAxisAngle( new THREE.Vector3( -1, 0, 0 ), Math.PI / 2 );
+        if ( j == 2 ) {
+          //leftJoints[i][j].quaternion.multiplyQuaternions( leftJoints[i][j].quaternion, rot );   
+        }
+      }
+
+        //leftJoints[i][j].quaternion.multiplyQuaternions( leftJoints[i][j].quaternion, rot180 );
+    }
+  }
+  //leftJoints[0][0].quaternion.multiplyQuaternions( leftJoints[0][0].quaternion, rot90 );
 }
 
 function getHandsR( hands ) {
   h = state.devices[hands];
   //threeQuatFromManusQuat( rightWrist.quaternion, h.wristOrientation );
+  let rot = new THREE.Quaternion();
+  rot.set( 0, 0, Math.sqrt(0.5), Math.sqrt(0.5) );
+  //rot.set( 0, 0, 1, 0 );
+  rot.setFromAxisAngle( new THREE.Vector3( 0, 0, -1 ), Math.PI / 2 );
   for ( let i=0; i<5; i++ ) {
     for ( let j=0; j<3; j++ ) {
-        threeQuatFromManusQuat( rightJoints[i][j].quaternion, h.jointOrientations, 20 * i + 4 *( j + 1 ) );
+      if ( i == 0 ) {
+        //rightJoints[i][j].quaternion.multiplyQuaternions( rightJoints[i][j].quaternion, rot );
+        threeQuatFromManusQuatTHUMB( rightJoints[i][j].quaternion, h.jointOrientations, 20 * i + 4 *( j + 1 ) );
+        //rightJoints[i][j].quaternion.multiplyQuaternions( rightJoints[i][j].quaternion, rot );   
+      } else {
+        threeQuatFromManusQuatTHUMB( rightJoints[i][j].quaternion, h.jointOrientations, 20 * i + 4 *( j + 1 ) );
+        let rot = new THREE.Quaternion();
+        rot.set( 0, 0, Math.sqrt(0.5), Math.sqrt(0.5) );
+        //rot.set( 0, 0, 1, 0 );
+        //rot.setFromAxisAngle( new THREE.Vector3( 0, 0, 1 ), Math.PI / 2 );
+        //rightJoints[i][j].quaternion.multiplyQuaternions( rightJoints[i][j].quaternion, rot90 );
+      }
     }
   }
 }
@@ -261,7 +329,7 @@ function connect_to_server( opt, log ) {
   
        } else if (obj.cmd == "trackingData") {
 
-        /*
+      /*
         ws received, {
           "cmd":"trackingData","state":
           {
@@ -270,19 +338,18 @@ function connect_to_server( opt, log ) {
               "pos":{"0":-0.31410789489746094,"1":1.6376476287841797,"2":0.4556894302368164},
               "quat":{"0":0.13929444551467896,"1":0.2569557726383209,"2":0.034140702337026596,"3":0.9557223320007324}
             },
-            "trackers":[
-            {
+            "trackers":
+            [{
               "pos":{"0":0.9590294361114502,"1":1.911466121673584,"2":0.5492393970489502},
               "quat":{"0":-0.1990630030632019,"1":0.6774951219558716,"2":0.6710811257362366,"3":0.22588586807250977}
             },
             {
               "pos":{"0":1.086222529411316,"1":1.8866705894470215,"2":0.4619896411895752},
               "quat":{"0":-0.6431819200515747,"1":-0.2571682035923004,"2":-0.28171005845069885,"3":0.6639434695243835}
-            }
-            ]
+            }]
           }
          }
-        */
+      */
           let lh = obj.state.trackers[0];
           let rh = obj.state.trackers[1];
 
@@ -294,29 +361,29 @@ function connect_to_server( opt, log ) {
           // apply 90 rot 
           // [sq(.5)]  [0]       [0]       [sq(.5)] //** +90 around X : CW    */
          
-
           rot90.set( Math.sqrt(0.5), 0, 0, Math.sqrt(0.5) );
+          rot90.setFromAxisAngle( new THREE.Vector3( -1, 0, 0 ), Math.PI / 2 );
 
-          rot90.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), Math.PI / 2 );
+          // [0]       [0]      [1]       [0]      //** 180 around Z : roll  */
+          rot180.set( 1, 0, 0, 0 );
+          rot180.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), Math.PI );
 
-          //leftWristQuat.fromArray(lh.quat);
-         //rightWristQuat.fromArray(rh.quat);
+          rotZ180.set( 0, 0, 1, 0 );
+          rotZ180.setFromAxisAngle( new THREE.Vector3( 0, 0, -1 ), Math.PI );
+
+          rotY90.set( 0, Math.sqrt(0.5), 0, Math.sqrt(0.5) );
+          rotY90.setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), Math.PI / 2 );
+
           
-          // L = leftWristQuat.angleTo(rot90)
-          // R = leftWristQuat.angleTo(rot90)
-
-          //  leftWristQuat.slerp(rot90, 1)
-          // //rightWristQuat.slerp(rot90, 1)
-
-          // leftWrist.quaternion.copy(leftWristQuat);
-          // rightWrist.quaternion.copy(rightWristQuat);
-          //leftWrist.quaternion.slerp( rot90, 1 );
-          //rightWrist.quaternion.slerp( rot90, 1 );
-
           leftWrist.quaternion.fromArray(lh.quat);
           rightWrist.quaternion.fromArray(rh.quat);
+          
           leftWrist.quaternion.multiplyQuaternions(leftWrist.quaternion, rot90);
           rightWrist.quaternion.multiplyQuaternions(rightWrist.quaternion, rot90);
+
+          //leftWrist.quaternion.multiplyQuaternions(leftWrist.quaternion, rot180);
+          //rightWrist.quaternion.multiplyQuaternions(rightWrist.quaternion, rot180);
+
           
 				} else {
           
@@ -398,15 +465,75 @@ function initialize() {
     // let y = getRandom();
     // y *= y;
     // y = Math.sqrt( y );
-    star.position.set( getRandom(), getRandom(), getRandom() );
+    star.position.set( getRandom(0.1,10), getRandom(0.1,10), getRandom(0.1,10) );
+
+    star.material.side = THREE.DoubleSide;
+    stars.push( star );
+  }
+
+  for (let i = 0; i < 100; i++) {
+    let geometry = new THREE.SphereGeometry( 0.2, 8, 6 );
+    let material = new THREE.MeshBasicMaterial( { map: starTexture } );
+    let star = new THREE.Mesh( geometry, material );
+    // let y = getRandom();
+    // y *= y;
+    // y = Math.sqrt( y );
+    star.position.set( getRandom(0.1,13), getRandom(0.1,13), getRandom(0.1,13) );
+
     star.material.side = THREE.DoubleSide;
     stars.push( star );
   }
   
-  for (let j = 0; j < stars.length; j++) {
-    scene.add( stars[j] );
+  for (let i = 0; i < 25; i++) {
+    let geometry = new THREE.SphereGeometry( 0.7, 8, 6 );
+    let material = new THREE.MeshBasicMaterial( { map: starTexture } );
+    let star = new THREE.Mesh( geometry, material );
+    // let y = getRandom();
+    // y *= y;
+    // y = Math.sqrt( y );
+    star.position.set( getRandom(0.1,15), getRandom(0.1,15), getRandom(0.1,15) );
+    
+    star.material.side = THREE.DoubleSide;
+    stars.push( star );
   }
 
+  for (let i = 0; i < 5; i++) {
+    let geometry = new THREE.SphereGeometry( 1, 8, 6 );
+    let material = new THREE.MeshBasicMaterial( { map: starTexture } );
+    let star = new THREE.Mesh( geometry, material );
+    // let y = getRandom();
+    // y *= y;
+    // y = Math.sqrt( y );
+    star.position.set( getRandom(0.1,15), getRandom(0.1,15), getRandom(0.1,15) );
+    
+    star.material.side = THREE.DoubleSide;
+    stars.push( star );
+  }
+  
+  
+  // flocks = new THREE.Group();
+  // scene.add(flocks);
+  room = new THREE.Group();
+  scene.add( room );
+  for (let i = 0; i < 1000; i++) {
+    let geometry = new THREE.SphereGeometry( 0.005, 8, 6 );
+    //let material = new THREE.MeshBasicMaterial( { map: starTexture } );
+    let dust = new THREE.Mesh( geometry, materials[5] );
+    // let y = getRandom();
+    // y *= y;
+    // y = Math.sqrt( y );
+    dust.position.set( getRandom(0.1,20), getRandom(0.1,20), getRandom(0.1,20) );
+    room.add(dust);
+    //star.material.side = THREE.DoubleSide;
+    //stars.push( star );
+  }
+
+
+  for (let j = 0; j < stars.length; j++) {
+    starGroup.add( stars[j] );
+  }
+  scene.add(starGroup);
+  starGroup.name = "starGroup";
 
   //gloves = new THREE.Group();
   //scene.add( gloves );
@@ -422,8 +549,8 @@ function initialize() {
 
   //** camera crosshairs | for intersections and to orientate sightline */
   crosshair = new THREE.Mesh( geometries[5], materials[3] );
-  //camera.add( crosshair );
-  //crosshair.position.z = - 1; //** keep crosshair slightly infront of you at all times */
+  camera.add( crosshair );
+  crosshair.position.z = - 1; //** keep crosshair slightly infront of you at all times */
   //user.add( camera );
   scene.add( camera );
   //user.add( camera );
@@ -431,9 +558,9 @@ function initialize() {
   // controls = new THREE.OrbitControls(camera);
   // camera.lookAt(0,  - .5, 0);
 
-  let vec = new THREE.Vector3( 0, 0, -1 );
-  vec.applyQuaternion( camera.quaternion );
-  crosshair.position.copy( vec );
+  // let vec = new THREE.Vector3( 0, 0, -1 );
+  // vec.applyQuaternion( camera.quaternion );
+  // crosshair.position.copy( vec );
 
   //** add lighting */
   scene.add( new THREE.HemisphereLight( 0x808080, 0x606060 ) );
@@ -456,12 +583,12 @@ function initialize() {
   
   //** add floor */
   //floor = new THREE.Mesh( geometries[7], materials[5] );
-  floor = new THREE.Mesh( geometries[7],  materials[0] )
+  floor = new THREE.Mesh( geometries[7],  materials[6] )
   floor.rotation.x = - Math.PI / 2;
   floor.name = "floor"
   floor.receiveShadow = true;
-  floor.add( new THREE.PointLight( 0xff0040, 2, 50 ) );
-  scene.add(floor)
+  scene.add( new THREE.PointLight( 0xff0040, 2, 50 ) );
+  //scene.add(floor)
   
 
   //** add ray | used for casting lines from head + controllers to objects | used for intersecting */
@@ -488,17 +615,17 @@ function initialize() {
   //leftWrist.position.set( 0, 1.3, + 0.1 ); // 0, 1.5, 0
   //rightWrist.position.set( 0, 1.3, - 0.1 ); // 0.5, 1.5, -1
 
-  leftWrist.add( new THREE.AxesHelper( 0.05 ) );
-  rightWrist.add( new THREE.AxesHelper( 0.05 ) );
+  //leftWrist.add( new THREE.AxesHelper( 0.05 ) );
+  //rightWrist.add( new THREE.AxesHelper( 0.05 ) );
 
   //************************************//
   //        LHS  Forward  RHS           //
-  //         -     [-X]    -            //
+  //         -    [-X]    -             //
   //       -| |-         -| |-          //
   //     -| | | |       | | | |-        //
   //    | |     | -   - |     | | Right //
   // +Z |  [+Y]   /   \         |  [-Z] //
-  //     \       /     \       /        //
+  //     \       /     \       /   [+X] //
   //      \_____/       \_____/         //
   //        +X            +X            //
   //                                    //
@@ -520,11 +647,14 @@ function initialize() {
   user.add( leftWrist );
   user.add( rightWrist );
 
+  //room.add( leftWrist );
+  //room.add( rightWrist );
+
   // scene.add( leftWrist );
   // scene.add( rightWrist );
   // scene.add( wrist );
 
-  let palm_length = -0.05;
+  let palm_length = 0.05;
 
 
   //** left fingertips */
@@ -534,18 +664,18 @@ function initialize() {
     let parent = leftWrist;
     leftJoints[i] = [];
 
-    for ( let j=0; j<3; j++ ) {
+    for ( let j=0; j < 3; j++ ) {
 
-      let joint = new THREE.Mesh( geometries[4], materials[2] );
+      let joint = new THREE.Mesh( geometries[4], materials[9] );
 
       if ( i==0 ) {
 
         // thumb
         switch( j ) {
 
-          case 0: joint.position.z = palm_length-0.02; joint.position.x = -0.04; break;
-          case 1: joint.position.z = -0.025; break;
-          case 2: joint.position.z = -0.02; break;
+          case 0: joint = new THREE.Mesh( geometries[4], materials[9] ); joint.position.z = palm_length-0.07; joint.position.x = 0.04;joint.position.y = 0.02; break;
+          case 1: joint = new THREE.Mesh( geometries[9], materials[9] ); joint.position.z = -0.025;joint.position.y = 0.02; break;
+          case 2: joint = new THREE.Mesh( geometries[10], materials[7] ); joint.position.z = -0.04; joint.position.y = 0.02;break;
         
         } // 0.06
 
@@ -554,9 +684,9 @@ function initialize() {
         // fingers
         switch( j ) {
 
-          case 0: joint.position.z = palm_length-0.05; joint.position.x = ( - 2.5 + i ) * 0.015; break;
-          case 1: joint.position.z = -0.03; break;
-          case 2: joint.position.z = -0.02; break;
+          case 0: joint = new THREE.Mesh( geometries[4], materials[9] ); joint.position.z = palm_length-0.1; joint.position.y = 0.02;joint.position.x = ( 2.5 - i ) *0.015; break;
+          case 1: joint = new THREE.Mesh( geometries[9], materials[9] ); joint.position.z = -0.03; joint.position.y = 0.02;break;
+          case 2: joint = new THREE.Mesh( geometries[10], materials[8] ); joint.position.z = -0.06;joint.position.y = 0.02; break;
 
         } // 0.115
       }
@@ -580,16 +710,16 @@ function initialize() {
 
     for ( let j = 0; j < 3; j++ ) {
 
-      let joint = new THREE.Mesh( geometries[4], materials[2] );
+      let joint = new THREE.Mesh( geometries[4], materials[9] );
 
       if ( i==0 ) {
 
         // thumb
         switch( j ) {
 
-          case 0: joint.position.z = palm_length-0.02; joint.position.x = +0.04; break;
-          case 1: joint.position.z = -0.025; break;
-          case 2: joint.position.z = -0.02; break;
+          case 0: joint = new THREE.Mesh( geometries[4], materials[9] ); joint.position.z = palm_length-0.07; joint.position.x = -0.04;joint.position.y = 0.02; break;
+          case 1: joint = new THREE.Mesh( geometries[9], materials[9] ); joint.position.z = -0.025; joint.position.y = 0.02;break;
+          case 2: joint = new THREE.Mesh( geometries[10], materials[7] ); joint.position.z = -0.05; joint.position.y = 0.02;break;
         
         } // 0.06
 
@@ -598,9 +728,9 @@ function initialize() {
         // fingers
         switch( j ) {
 
-          case 0: joint.position.z = palm_length-0.05; joint.position.x = ( 2.5 - i ) *-0.015; break;
-          case 1: joint.position.z = -0.03; break;
-          case 2: joint.position.z = -0.02; break;
+          case 0: joint = new THREE.Mesh( geometries[4], materials[9] ); joint.position.z = palm_length-0.1; joint.position.y = 0.02; joint.position.x = ( -2.5 + i ) *+0.015; break;
+          case 1: joint = new THREE.Mesh( geometries[9], materials[9] ); joint.position.z = -0.03; joint.position.y = 0.02; break;
+          case 2: joint = new THREE.Mesh( geometries[10], materials[8] ); joint.position.z = -0.06; joint.position.y = 0.02; break;
 
         } // 0.115
       }
@@ -629,23 +759,38 @@ function initialize() {
   line.name = 'handRay';
   line.scale.z = 1;
 
-  leftHandControl.add( line.clone() );
-  rightHandControl.add( line.clone() );
+  leftHandControl.add( line.clone() ); // leftWrist
+  rightHandControl.add( line.clone() ); // rightWrist
 
   //scene.add( new THREE.AxesHelper( 1 ) );
 
 
   //** add event listeners  */
   window.addEventListener( 'resize', onWindowResize, false );
-  //window.addEventListener('vrdisplayactivate', onVRRequestPresent, false);
-	//window.addEventListener('vrdisplaydeactivate', onVRExitPresent, false);
+  // window.addEventListener('vrdisplayactivate', onVRRequestPresent, false);
+	// window.addEventListener('vrdisplaydeactivate', onVRExitPresent, false);
   // window.addEventListener( 'vrdisplaypointerrestricted', onPointerRestricted, false );
   // window.addEventListener( 'vrdisplaypointerunrestricted', onPointerUnrestricted, false );
 
 
   // //** 3D BOIDS */
-  // flock = new THREE.Group();
-  // room.add(flock);
+  //let Creature;
+  for ( let i = 0; i < 100; i++ ) {
+    Creatures[i] = new buildCreature(); //Creature
+    Creatures[i].initialize();
+    Creatures[i].display();
+    //Creatures.push(Creature);
+  }
+  // for ( let i = 0; i < Creatures.length; i++ ) {
+  //   scene.add( Creatures[i] );
+  // }
+  //boids.add( Creatures );
+  //let prevFog = true;
+  
+  scene.add( boids );  
+  //boids.position.y += 1;
+  //boids.position.z += 2;
+
 
   try {
     sock = connect_to_server( {}, write );
@@ -687,7 +832,7 @@ function onSelectStart( event ) {
     let object = intersection.object;
     object.matrix.premultiply( tempMatrix );
     object.matrix.decompose( object.position, object.quaternion, object.scale );
-    object.material.emissive.b = 1;
+    //object.material.emissive.b = 1;
     handAction.add( object );
 
     handAction.userData.selected = object;
@@ -706,8 +851,8 @@ function onSelectEnd( event ) {
     let object = handAction.userData.selected;
     object.matrix.premultiply( handAction.matrixWorld );
     object.matrix.decompose( object.position, object.quaternion, object.scale );
-    object.material.emissive.b = 0;
-    gloves.add( object );
+    //object.material.emissive.b = 0;
+    scene.add( object );
 
     handAction.userData.selected = undefined;
 
@@ -717,34 +862,56 @@ function onSelectEnd( event ) {
 }
 
 //  //******************************** // GET INTERSECTIONS // ***************************************//
-function getIntersections( handAction ) {
+function getIntersections( headAction ) {
 
-  tempMatrix.identity().extractRotation( handAction.matrixWorld );
+  tempMatrix.identity().extractRotation( headAction.matrixWorld );
 
-  raycaster.ray.origin.setFromMatrixPosition( handAction.matrixWorld );
+  raycaster.ray.origin.setFromMatrixPosition( headAction.matrixWorld );
   raycaster.ray.direction.set( 0, 0, -1 ).applyMatrix4( tempMatrix );
 
-  return raycaster.intersectObjects( room.children );
+  return raycaster.intersectObjects( user.children );
 
 }
+// function getIntersectionsL( handAction ) {
+
+//   tempMatrix.identity().extractRotation( handAction.matrixWorld );
+
+//   raycaster.ray.origin.setFromMatrixPosition( handAction.matrixWorld );
+//   raycaster.ray.direction.set( 0, 0, -1 ).applyMatrix4( tempMatrix );
+
+//   return raycaster.intersectObjects( boids.children );
+
+// }
+// function getIntersectionsR( handAction ) {
+
+//   tempMatrix.identity().extractRotation( handAction.matrixWorld );
+
+//   raycaster.ray.origin.setFromMatrixPosition( handAction.matrixWorld );
+//   raycaster.ray.direction.set( 0, 0, -1 ).applyMatrix4( tempMatrix );
+
+//   return raycaster.intersectObjects( boids.children );
+
+// }
 
 //  //********************************* // INTERSECT OBJECT // ***************************************//
-function intersectObjects( handAction ) {
+function intersectObjects( headAction ) {
 
   //* Do not highlight when already selected */
 
   if ( handAction.userData.selected !== undefined ) return;
 
   let handRay = handAction.getObjectByName( 'handRay' );
-  let intersections = getIntersections( handAction );
+  let intersections = getIntersections( headAction );
 
   if ( intersections.length > 0 ) {
-
+    console.log('head action')
     let intersection = intersections[ 0 ];
 
     let object = intersection.object;
+    
     object.material.emissive.r = 1;
-    // object.rotation.y += 0.1;
+    //object.rotation.y += 0.1;
+    //object.position.set(0,0,0);
     intersections.push( object );
 
     handRay.scale.z = intersection.distance;
@@ -756,15 +923,75 @@ function intersectObjects( handAction ) {
   }
 
 }
+// function intersectObjectsL( handAction ) {
+
+//   //* Do not highlight when already selected */
+
+//   if ( handAction.userData.selected !== undefined ) return;
+
+//   let handRay = handAction.getObjectByName( 'handRay' );
+//   let intersections = getIntersectionsL( handAction );
+
+//   if ( intersections.length > 0 ) {
+//     console.log('left hand action')
+//     let intersection = intersections[ 0 ];
+
+//     let object = intersection.object;
+    
+//     //object.material.emissive.r = 1;
+//     //object.rotation.y += 0.1;
+//     //object.position.set(0,0,0);
+//     intersections.push( object );
+
+//     //onSelectStart();
+
+//     handRay.scale.z = intersection.distance;
+
+//   } else {
+
+//     handRay.scale.z = 5;
+
+//   }
+
+// }
+// function intersectObjectsR( handAction ) {
+
+//   //* Do not highlight when already selected */
+
+//   if ( handAction.userData.selected !== undefined ) return;
+
+//   let handRay = handAction.getObjectByName( 'handRay' );
+//   let intersections = getIntersectionsR( handAction );
+
+//   if ( intersections.length > 0 ) {
+//     console.log('right hand action')
+//     let intersection = intersections[ 0 ];
+
+//     let object = intersection.object;
+    
+//     //object.material.emissive.r = 1;
+//     //object.rotation.y += 0.1;
+//     //object.position.set(0,0,0);
+//     intersections.push( object );
+
+//     handRay.scale.z = intersection.distance;
+
+//   } else {
+
+//     handRay.scale.z = 5;
+
+//   }
+
+// }
 
 //  //********************************** // INTERSECT HEAD // ****************************************//
 function intersectHead() {
   
   raycaster.setFromCamera( { x: 0, y: 0 }, camera );
-  let intersects = raycaster.intersectObjects( user.children );
+  let intersects = raycaster.intersectObjects( room.children );
   
   if ( intersects.length > 0 ) {
-    
+    console.log('head action');
     if ( intersected != intersects[ 0 ].object ) {
       
       if ( intersected ) intersected.material.emissive.setHex( intersected.currentHex );
@@ -772,7 +999,7 @@ function intersectHead() {
       intersected = intersects[ 0 ].object;
       intersected.currentHex = intersected.material.emissive.getHex();
       intersected.material.emissive.setHex( 0xff0000 );
-      // intersected.rotation.y += 0.5;
+      intersected.rotation.y += 0.5;
       // intersected.position.z -= 0.1;
 
     }
@@ -820,36 +1047,261 @@ function checkRoom() {
 //  //************************************************************************************************// 
 //  //************************************************************************************************// 
 
-// function checkBoids( range ) {
+// function checkBoids( boundary ) {
   
-//   for ( let i = 0; i < flock.children.length; i ++ ) {
+//   for ( let i = 0; i < flocks.children.length; i ++ ) {
 
-//     let object = flock.children[ i ];
+//     let this = flocks.children[ i ];
 
-//     if ( object.position.x < - range  || object.position.x > range  ) {
+//     if ( this.position.x < - boundary  || this.position.x > boundary  ) {
 
-//       object.position.x = THREE.Math.clamp( object.position.x, - range, range );
-//       object.userData.velocity.x = - object.userData.velocity.x;
-
-//     }
-
-//     if ( object.position.y < 0 || object.position.y > range ) {
-
-//       object.position.y = THREE.Math.clamp( object.position.y, 0, range );
-//       object.userData.velocity.y = - object.userData.velocity.y;
+//       this.position.x = THREE.Math.clamp( this.position.x, - boundary, boundary );
+//       this.userData.velocity.x = - this.userData.velocity.x;
 
 //     }
 
-//     if ( object.position.z < - range || object.position.z > range ) {
+//     if ( this.position.y < 0 || this.position.y > boundary ) {
 
-//       object.position.z =  THREE.Math.clamp( object.position.z, - range, range );
-//       object.userData.velocity.z = - object.userData.velocity.z;
+//       this.position.y = THREE.Math.clamp( this.position.y, 0, boundary );
+//       this.userData.velocity.y = - this.userData.velocity.y;
+
+//     }
+
+//     if ( this.position.z < - boundary || this.position.z > boundary ) {
+
+//       this.position.z =  THREE.Math.clamp( this.position.z, - boundary, boundary );
+//       this.userData.velocity.z = - this.userData.velocity.z;
 
 //     }
 
 //   }
   
 // }
+
+
+function buildCreature() {
+  this.position = new THREE.Vector3();
+  this.velocity = new THREE.Vector3();
+  this.acceleration = new THREE.Vector3();
+
+  this.r = 1.2;
+  this.maxspeed = 0.5;
+  this.maxforce = 0.2;
+  // this.max = 5;
+  // this.min = -5
+  this.max = new THREE.Vector3(0.01,0.01,0.01);
+  this.min = new THREE.Vector3(-0.01,-0.01,-0.01); //-0.5,-0.5,-0.5
+
+  // let geometry = new THREE.SphereGeometry(1,10,10);
+  // let material = new THREE.MeshToonMaterial({ color: 0xffffff, opacity:0.5, transparent:true, wireframe:true, emissive: 0xffffff,emissiveIntensity:0.1} );
+  let geometry = new THREE.SphereGeometry( 0.01, 0.02, 3 )
+  let H = Math.random()*360;
+  let material = new THREE.MeshLambertMaterial( { color: new THREE.Color("hsl(" + H + ", 100%, 80%)" ), transparency: true, opacity: 0.4 } );
+  //    star.material.color = new THREE.Color("hsl(255, 100%, " + lightness + "%)");
+  let boid = new THREE.Mesh( geometry , material );
+  boids.add(boid);
+  //flocks.add(boid);
+
+  this.initialize = function() {
+      this.position.x = getRandom(0.1,4); //5 - Math.random() * 5;
+      this.position.y = getRandom(0.1,4); //5 - Math.random() * 5;
+      this.position.z = getRandom(0.1,4); //5 - Math.random() * 5;
+      this.velocity.x = 0.01;//getRandom(0.1,0.05);
+      this.velocity.y = 0.01;//getRandom(0.1,0.05);
+      this.velocity.z = 0.01;//getRandom(0.1,0.05);
+      this.acceleration.x = 0.0;
+      this.acceleration.y = 0.0;
+      this.acceleration.z = 0.0;
+      this.mass = 0.015;
+      //console.log('Initialize', this.position);                    
+  }
+
+  this.flock = function(Creatures) {
+      let sep = this.separate(Creatures);   // Separation
+      let ali = this.align(Creatures);      // Alignment
+      let coh = this.cohesion(Creatures);   // Cohesion
+
+      //this.quaternion.multiplyQuaternions(coh);
+
+      // Arbitrarily weight these forces
+      sep.multiplyScalar(1.5); //1.5
+      ali.multiplyScalar(1.3);
+      coh.multiplyScalar(1);
+
+      //let temp
+
+      // Add the force vectors to acceleration
+      this.applyForce(sep);
+      this.applyForce(ali);
+      this.applyForce(coh);
+  };
+
+  this.applyForce = function(force){
+      //let tempForce = force.clone();
+      let f = force.divideScalar(this.mass);
+      this.acceleration.add(f);
+  }
+
+  this.separate = function(Creatures) {
+      let desiredseparation = 3;
+      let steer = new THREE.Vector3();
+      let count = 0;
+      // For every boid in the system, check if it's too close
+      for (let i = 0; i < Creatures.length; i++) {
+          let d = this.position.distanceTo(Creatures[i].position);
+          // If the distance is greater than 0 and less than an arbitrary amount (0 when you are yourself)
+          if ((d > 0) && (d < desiredseparation)) {
+              // Calculate vector pointing away from neighbor
+              let pos = this.position.clone();
+              let diff = pos.sub(Creatures[i].position);
+              diff.normalize();
+              diff.divideScalar(d);        // Weight by distance
+              steer.add(diff);
+              count++;            // Keep track of how many
+          }
+      }
+      // Average -- divide by how many
+      if (count > 0) {
+          steer.divideScalar(count);
+      }
+
+      if (steer.length > 0){
+          // Our desired vector is the average scaled to maximum speed
+          steer.normalize();
+          steer.multiplyScalar(this.maxspeed);
+          // Implement Reynolds: Steering = Desired - Velocity
+          steer.sub(this.velocity);
+          //sum.limit(this.maxforce);
+      }
+      return steer;
+  };
+
+  // Alignment
+  // For every nearby boid in the system, calculate the average velocity
+  this.align = function(Creatures) {
+      let neighbordist = 1;
+      let alignsteer = new THREE.Vector3();
+      let count = 0;
+      for (let i = 0; i < Creatures.length; i++) {
+          let d = this.position.distanceTo(Creatures[i].position);
+          if ((d > 0) && (d < neighbordist)) {
+          alignsteer.add(Creatures[i].velocity);
+          count++;
+          }
+      }
+      if (count > 0) {
+          alignsteer.divideScalar(count);
+          alignsteer.normalize();
+          alignsteer.multiplyScalar(this.maxspeed);
+          let steer = alignsteer.sub(this.velocity);
+          //steer.limit(this.maxforce);
+          return steer;
+      } else {
+          return new THREE.Vector3();   
+      }
+  };
+
+  // Cohesion
+  // For the average location (i.e. center) of all nearby boids, calculate steering vector towards that location
+  this.cohesion = function(Creatures) {
+      let neighbordist = 2;
+      let cohesionsteer = new THREE.Vector3();   
+      let count = 0;
+      for (let i = 0; i < Creatures.length; i++) {
+          let d = this.position.distanceTo(Creatures[i].position);
+          if ((d > 0) && (d < neighbordist)) {
+              cohesionsteer.add(Creatures[i].position); // Add location
+              count++;
+          }
+      }
+      if (count > 0) {
+          cohesionsteer.divideScalar(count);
+          return this.seek(cohesionsteer);  // Steer towards the location
+      } else {
+          return new THREE.Vector3();
+      }
+  };
+
+  this.seek = function(target) {
+      let tgt = target.clone();
+      let d = 0.2;    // deviation
+      let wan = 1.2;
+      let devAngle = Math.PI * 2 * Math.random();
+      let dev = d * Math.sin( 0.5 * devAngle) 
+      //this.position.multiplyScalar(dev);
+      let desired = tgt.sub( this.position );  // A vector pointing from the location to the target
+
+      // Normalize desired and scale to maximum speed
+      desired.normalize();
+      desired.multiplyScalar(this.maxspeed);
+      des = desired.clone();
+      // Steering = Desired minus velocity
+      let steer = des.sub(this.velocity);
+      //steer.multiplyScalar(wan);
+      // steer.limit(this.maxforce);  // Limit to maximum steering force
+      return steer;
+  };
+
+  this.update = function() {
+      this.velocity.add(this.acceleration);
+      this.velocity.clamp(this.min, this.max);
+      this.position.add(this.velocity);
+      this.acceleration.multiplyScalar(0);
+      //console.log(`NEW Position: ${this.position}`);
+  }
+
+  this.display = function(){
+      boid.position.x = this.position.x;
+      boid.position.y = this.position.y;
+      boid.position.z = this.position.z;
+      //console.log(`BOID Position: ${boid.position}`);
+  }
+
+  this.checkEdges = function() {
+
+    if (this.position.x > boundary){
+        this.position.x = -boundary;
+        //this.velocity.x *= -1;
+        // console.log(this.velocity);
+    }
+    else if (this.position.x < -boundary){
+        this.position.x = boundary;
+        //this.velocity.x *= -1;
+        // console.log('HIT');
+    }
+
+    if (this.position.y > boundary){
+        this.position.y = 0;
+        //this.velocity.y *= -1;
+    }
+    else if (this.position.y < 0){
+        this.position.y = boundary;
+        //this.velocity.y *= -1;
+    }
+
+    if (this.position.z > boundary){
+        this.position.z = -boundary;
+        //this.velocity.z *= -1;
+    }
+    else if (this.position.z < -boundary){
+        this.position.z = boundary;
+        //this.velocity.z *= -1;
+    }                      
+  }
+
+  this.calculateAttraction = function(m) {
+    let tempPos = this.position.clone();
+    let force = tempPos.sub(m.position);
+    let distance = Math.max(force.length()+5,25);
+    // let distance = force.length();
+
+    force.normalize();
+    let strength = (0.0005*this.mass*this.mass)/(distance*distance);
+
+    force.multiplyScalar(strength);
+    return force;
+  }
+}
 
 
 //  //************************************************************************************************/ 
@@ -898,13 +1350,22 @@ function render() {
 
   //** manage intersections */
   cleanIntersected();
-  //intersectObjects( leftHandControl );
-  //intersectObjects( rightHandControl );
+  
+  //getIntersectionsL( leftWrist );
+  //intersectObjectsL( leftWrist );
+
+  //cleanIntersected();
+
+  //getIntersectionsR( rightWrist );
+  //intersectObjectsR( rightWrist );
+
+  //cleanIntersected();
+
   intersectHead();
   //checkRoom();
   
   //** 3D BOIDS */
-  //checkBoids( range );
+  //checkBoids( boundary );
 
   //let delta = clock.getDelta();
   
@@ -918,8 +1379,11 @@ function render() {
     star.rotation.x += 0.01*k/100;
     star.rotation.y += 0.01*k/100;
     //star.rotation.z += 0.001*k;
-    lightness > 100 ? lightness = 0 : lightness+=1; //++
-    star.material.color = new THREE.Color("hsl(255, 100%, " + lightness + "%)");
+    lightness > 100 ? lightness = 0 : lightness+=0.3; //++
+    //let material = new THREE.MeshLambertMaterial( { color: new THREE.Color("hsl(" + H + ", 100%, 80%)" ), transparency: true, opacity: 0.4 } );
+    //   planeMaterial.color.setHSL(object.userData.H,object.userData.S,object.userData.L);
+    //star.material.color = new THREE.Color("hsl( 255, 100%, " + lightness + "%)");
+    star.material.color.setHSL(255, 100, lightness);
   } 
 
   let invertStage = new THREE.Matrix4()
@@ -927,7 +1391,7 @@ function render() {
   let vrDisplay = renderer.vr.getDevice()
   if (vrDisplay) {
     temp.fromArray( vrDisplay.stageParameters.sittingToStandingTransform )
-   // invertStage.getInverse( temp, true );
+    //invertStage.getInverse( temp, true );
     //temp.getInverse( temp )
     //console.log(temp)
     //user.position.set(invertStage[12])
@@ -935,6 +1399,34 @@ function render() {
    // scene.position.fromArray(temp.elements, 12);
   
   } 
+
+  for ( let k = 0; k < Creatures.length; k++ ) {
+    // for ( let j = 0; j < Creatures.length; j++ ) {
+    //   if ( k !== j ) {
+    //     let force = Creatures[j].calculateAttraction(Creatures[k]);
+    //     // console.log(force);
+    //     Creatures[k].applyForce(force);
+    //   }
+    // }
+    // let c = Creatures[k];
+    // c.applyForce(gravity);
+    // c.applyForce(wind);
+    // c.update();
+    // c.display();
+    // c.checkEdges();
+    // c.checkEdges();
+    // c.flock(Creatures);
+    // c.update();
+    // c.display();
+    Creatures[k].checkEdges();
+    Creatures[k].flock(Creatures);
+    Creatures[k].update();
+    Creatures[k].display();            
+  }
+
+  boids.rotation.y += 0.002;
+  boids.rotation.z += 0.002;
+
   renderer.render( scene, camera );
 
 }
