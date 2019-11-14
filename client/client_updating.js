@@ -42,6 +42,10 @@
 
 //let Creature = require('./js/Creature.js');
 
+
+//group.visible = false;
+
+let tmp, ret;
 let dust;
 let paint = false;
 
@@ -124,9 +128,9 @@ let materials = [
   } ),
   // [2] fingertips 
   new THREE.MeshToonMaterial ( {
-    color: 0x166d99
-    //transparent: true,
-    //opacity: 0.5
+    color: 0x166d99,
+    transparent: true,
+    opacity: 0
   } ),
   // [3] crosshair
   new THREE.MeshBasicMaterial( {
@@ -200,7 +204,7 @@ let rotSpeed = 0.01;
 function getRandom(Min, Max) {
   let min = Min;
   let max = Max;
-  let num = Math.floor(Math.random()*max) + min; // this will get a number between min/1/0 and max;
+  let num = Math.floor(Math.random()*max) + min; // this will get a number between min and max;
   num *= Math.floor(Math.random()*2) == 1 ? 1 : -1; // this will add minus sign in 50% of cases
   return num;
 }
@@ -216,8 +220,15 @@ function threeQuatFromManusQuat( q, arr, offset=0 ) {
 }
 
 function threeQuatFromManusQuatTHUMB( q, arr, offset=0 ) {
+  //** swap quaternion differences */
+  //** Manus: [w] 	 		  [x]v   		[y]^ 			  [z]<    */
+  //** Manus: [x]v 			  [y]^      [z]< 		  	[w=>0]  */
+  //** Manus: [z->x]<		  [y]^      [x->z]v	  	[w=>0]  */
+  //** Manus: [-z]->>     [y] 	    [x]v      	[w=>0]  */
+	//** Three: [x]> 			  [y]^ 	  	[z]v   			[w]     */
   q.set( -arr[ offset + 3 ], arr[ offset + 2 ], arr[ offset + 1 ], arr[ offset + 0 ] );
 }
+
 
 function getHandsL( hands ) {
   h = state.devices[hands];
@@ -388,22 +399,25 @@ function connect_to_server( opt, log ) {
           // apply 90 rot 
           // [-/+sq(.5)]  [0]       [0]       [sq(.5)] //** -/+90 around X : CW    */
          
-          rot90.set(Math.sqrt(0.5), 0, 0, Math.sqrt(0.5) );
-          rot90.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), Math.PI / 2 );
+          //rot90.set(Math.sqrt(0.5), 0, 0, Math.sqrt(0.5) );
+          rot90.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), -Math.PI / 2 );
 
           rotZ180.set( 0, 0, 1, 0 );
-          rotZ180.setFromAxisAngle( new THREE.Vector3( 0, 0, 1 ), Math.PI );
+          //rotZ180.setFromAxisAngle( new THREE.Vector3( 0, 0, 1 ), Math.PI );
 
           rot180.set( 1, 0, 0, 0 );
-          rot180.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), Math.PI );
+          //rot180.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), Math.PI );
           
           leftWrist.quaternion.fromArray(lh.quat);
           rightWrist.quaternion.fromArray(rh.quat);
           
-          leftWrist.quaternion.multiplyQuaternions(leftWrist.quaternion, rot180);
+          //leftWrist.quaternion.multiplyQuaternions(leftWrist.quaternion, rotZ180);
           leftWrist.quaternion.multiplyQuaternions(leftWrist.quaternion, rot90);
 
-          rightWrist.quaternion.multiplyQuaternions(rightWrist.quaternion, rotZ180);
+          rot180.set( 0, 1, 0, 0 );
+          //rot90.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), -Math.PI/2 );
+
+          //rightWrist.quaternion.multiplyQuaternions(rightWrist.quaternion, rot180);
           rightWrist.quaternion.multiplyQuaternions(rightWrist.quaternion, rot90);
 
           // // check interactions
@@ -530,7 +544,7 @@ function initialize() {
     stars.push( star );
   }
 
-  for (let i = 0; i < 10; i++) { //100
+  for (let i = 0; i < 100; i++) { //100
     let geometry = new THREE.SphereGeometry( 0.2, 8, 6 );
     let material = new THREE.MeshBasicMaterial( { map: starTexture } );
     let star = new THREE.Mesh( geometry, material );
@@ -543,7 +557,7 @@ function initialize() {
     stars.push( star );
   }
   
-  for (let i = 0; i < 2; i++) { //25
+  for (let i = 0; i < 25; i++) { //25
     let geometry = new THREE.SphereGeometry( 0.7, 8, 6 );
     let material = new THREE.MeshBasicMaterial( { map: starTexture } );
     let star = new THREE.Mesh( geometry, material );
@@ -574,26 +588,36 @@ function initialize() {
   // scene.add(flocks);
   room = new THREE.Group();
   scene.add( room );
-  for (let i = 0; i < 50; i++) { //50
-    let geometry = new THREE.SphereGeometry( 0.005, 8, 6 );
+  for (let i = 0; i < 500; i++) { //500
+    let geometry = new THREE.SphereGeometry( 0.01, 8, 6 );
     //let material = new THREE.MeshBasicMaterial( { map: starTexture } );
     dust = new THREE.Mesh( geometry, materials[5] );
     // let y = getRandom();
     // y *= y;
     // y = Math.sqrt( y );
-    dust.position.set( getRandom(0.1,5), getRandom(0.1,5), getRandom(0.1,5) ); //25
-    let light = new THREE.PointLight( 0xFFA824, 1, 100 );
-    //light.position.set( 50, 50, 50 );
-    dust.add( light );
+    dust.position.set( getRandom(3,12), getRandom(3,12), getRandom(3,12) ); //25
+    // let light = new THREE.PointLight( 0xFFA824, 1, 100 );
+    // light.position.set( 50, 50, 50 );
+    // //dust.add( light );
+    dust.name = "d" + i;
     room.add(dust);
     //star.material.side = THREE.DoubleSide;
     //stars.push( star );
   }
 
 
+
+  tmp = stars.slice(stars);
+  ret = [];
   for (let j = 0; j < stars.length; j++) {
-    starGroup.add( stars[j] );
+    let index = Math.floor(Math.random() * tmp.length);
+    let removed = tmp.splice(index, 1);
+    // Since we are only removing one element
+    ret.push(removed[0]);
+    ret[j].name = "s" + j;
+    starGroup.add( ret[j] );
   }
+
   scene.add(starGroup);
   starGroup.name = "starGroup";
 
@@ -607,7 +631,11 @@ function initialize() {
   
 
   //** add camera */
-  camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.04, 10 );
+  const fov = 75;
+  const aspect = window.innerWidth / window.innerHeight; // 2;  // the canvas default
+  const near = 0.04; //0.1;
+  const far = 20; //10 //50;
+  camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
 
   //** camera crosshairs | for intersections and to orientate sightline */
   crosshair = new THREE.Mesh( geometries[5], materials[3] );
@@ -617,6 +645,8 @@ function initialize() {
   scene.add( camera );
   //user.add( camera );
 
+
+  
   // controls = new THREE.OrbitControls(camera);
   // camera.lookAt(0,  - .5, 0);
 
@@ -681,8 +711,8 @@ function initialize() {
   //leftWrist.position.set( 0, 1.3, + 0.1 ); // 0, 1.5, 0
   //rightWrist.position.set( 0, 1.3, - 0.1 ); // 0.5, 1.5, -1
 
-  leftWrist.add( new THREE.AxesHelper( 0.05 ) );
-  rightWrist.add( new THREE.AxesHelper( 0.05 ) );
+  //leftWrist.add( new THREE.AxesHelper( 0.05 ) );
+  //rightWrist.add( new THREE.AxesHelper( 0.05 ) );
 
   //************************************//
   //        LHS  Forward  RHS           //
@@ -740,9 +770,9 @@ function initialize() {
         // thumb
         switch( j ) {
 
-          case 0: joint = new THREE.Mesh( geometries[4], materials[9] ); joint.position.z = palm_length-0.03; joint.position.y = 0.03; joint.position.x = -0.04; break;
-          case 1: joint = new THREE.Mesh( geometries[9], materials[9] ); joint.position.z = +0.025; break;
-          case 2: joint = new THREE.Mesh( geometries[10], materials[7] ); joint.position.z = +0.04; break;
+          case 0: break; // joint = new THREE.Mesh( geometries[10], materials[7] ); joint.position.z = +0.04; joint.position.y = 0.0; joint.position.x = -0.04; break;
+          case 1: break; // joint = new THREE.Mesh( geometries[10], materials[7] ); joint.position.z = 0; joint.position.y = -0.01; joint.position.x = -0.0; break;
+          case 2: break; // joint = new THREE.Mesh( geometries[10], materials[7] ); joint.position.z = 0; break;
         
         } // 0.06
 
@@ -751,10 +781,9 @@ function initialize() {
         // fingers
         switch( j ) {
 
-          case 0: joint = new THREE.Mesh( geometries[4], materials[9] ); joint.position.z = palm_length; joint.position.y = 0.03; joint.position.x = ( i - 2.5 ) *0.015; break;
-          case 1: joint = new THREE.Mesh( geometries[9], materials[9] ); joint.position.z = +0.03; break;
-          case 2: joint = new THREE.Mesh( geometries[10], materials[8] ); joint.position.z = +0.05; break;
-
+          case 0: joint = new THREE.Mesh( geometries[10], materials[8] ); joint.position.z = +0.06; joint.position.y = 0.0; joint.position.x = ( -1 * ( 2.5 - i) ) *0.015; break;
+          case 1: joint = new THREE.Mesh( geometries[10], materials[8] ); joint.position.z = +0.04; joint.position.y = 0.0; joint.position.x = ( -1 * ( 2.5 - i) ) *0.005; break;
+          case 2: joint = new THREE.Mesh( geometries[10], materials[8] ); joint.position.z = +0.04; joint.position.y = 0.0; joint.position.x = ( -1 * ( 2.5 - i) ) *0.001; break;
         } // 0.115
       }
 
@@ -783,9 +812,9 @@ function initialize() {
         // thumb
         switch( j ) {
 
-          case 0: joint = new THREE.Mesh( geometries[4], materials[9] ); joint.position.z = palm_length-0.07; joint.position.y = -0.03; joint.position.x = 0.04; break;
-          case 1: joint = new THREE.Mesh( geometries[9], materials[9] ); joint.position.z = -0.025; break;
-          case 2: joint = new THREE.Mesh( geometries[10], materials[7] ); joint.position.z = -0.04; break;
+          case 0: break;// joint = new THREE.Mesh( geometries[10], materials[7] ); joint.position.z = palm_length-0.07; joint.position.y = -0.03; joint.position.x = 0.04; break;
+          case 1: break;//joint = new THREE.Mesh( geometries[10], materials[7] ); joint.position.z = -0.025; break;
+          case 2: break;//joint = new THREE.Mesh( geometries[10], materials[7] ); joint.position.z = -0.04; break;
         
         } // 0.06
 
@@ -794,9 +823,9 @@ function initialize() {
         // fingers
         switch( j ) {
 
-          case 0: joint = new THREE.Mesh( geometries[4], materials[9] ); joint.position.z = palm_length-0.1; joint.position.y = -0.03; joint.position.x = ( 2.5 - i ) * +0.015; break;
-          case 1: joint = new THREE.Mesh( geometries[9], materials[9] ); joint.position.z = -0.05; break;
-          case 2: joint = new THREE.Mesh( geometries[10], materials[8] ); joint.position.z = -0.08; break;
+          case 0: joint = new THREE.Mesh( geometries[10], materials[8] ); joint.position.z = +0.06; joint.position.y = 0.0; joint.position.x = ( 2.5-i) *0.015; break;
+          case 1: joint = new THREE.Mesh( geometries[10], materials[8] ); joint.position.z = +0.04; joint.position.y = 0.0; joint.position.x = ( 2.5-i) *0.015; break;
+          case 2: joint = new THREE.Mesh( geometries[10], materials[8] ); joint.position.z = +0.04; joint.position.y = 0.0; joint.position.x = ( 2.5-i) *0.015; break;
 
         } // 0.115
       }
@@ -829,14 +858,14 @@ function initialize() {
   rightHandControl.add( lineRay.clone() ); // rightWrist
 
 
-  let lineL = new THREE.Line( geometries[8]);//, materials[3] );
-  lineL.scale.z = -1;
+  let lineL = new THREE.Line( geometries[8], materials[3] );
+  lineL.scale.z = -0.2;
   lineL.name = 'leftRay';
   leftWrist.add( lineL.clone() );
 
-  let lineR = new THREE.Line( geometries[8]);//, materials[3] );
+  let lineR = new THREE.Line( geometries[8], materials[3] );
   lineR.name = 'rightRay';
-  lineR.scale.z = 1;
+  lineR.scale.z = -0.2;
   rightWrist.add( lineR.clone() );
 
   //scene.add( new THREE.AxesHelper( 1 ) );
@@ -852,7 +881,7 @@ function initialize() {
 
   // //** 3D BOIDS */
   //let Creature;
-  for ( let i = 0; i < 100; i++ ) {
+  for ( let i = 0; i < 200; i++ ) {
     Creatures[i] = new buildCreature(); //Creature
     Creatures[i].initialize();
     Creatures[i].display();
@@ -981,15 +1010,15 @@ function intersectObjects( leftEvent, rightEvent ) {
   console.log('paint the sky')
   //* Do not highlight when already selected */
 
-  if ( leftEvent.userData.selected !== undefined ) return;
-  if ( rightEvent.userData.selected !== undefined ) return;
+  //if ( leftEvent.userData.selected !== undefined ) return;
+  //if ( rightEvent.userData.selected !== undefined ) return;
 
   let paintRayL = leftEvent.getObjectByName( 'leftRay' );
   let paintRayR = rightEvent.getObjectByName( 'rightRay' );
   let intersectionsLeft = getIntersections( leftEvent );
   let intersectionsRight = getIntersections( rightEvent );
 
-  if ( intersectionsLeft.length > 0 && intersectionsRight.length > 0 ) {
+  if ( intersectionsLeft.length > 0 || intersectionsRight.length > 0 ) {
     console.log('paint the sky')
     let leftInter = intersectionsLeft[ 0 ];
     let rightInter = intersectionsRight[ 0 ];
@@ -1309,10 +1338,10 @@ function buildCreature() {
     }
 
     if (this.position.y > boundary){
-        this.position.y = 0;
+        this.position.y = -boundary;
         //this.velocity.y *= -1;
     }
-    else if (this.position.y < 0){
+    else if (this.position.y < -boundary){
         this.position.y = boundary;
         //this.velocity.y *= -1;
     }
@@ -1329,7 +1358,7 @@ function buildCreature() {
 
   this.findUser = function(bump) {
     let d = this.position.distanceTo(bump.position);
-    if ((d > 0) && (d < 0.5)) {
+    if ((d > 0) && (d < 1)) {
         try {
           sock.send( "sendHaptics_back" );
         } catch( e ) {
@@ -1372,6 +1401,24 @@ function render() {
 
   if ( !state ) return;
 
+  // function resizeRendererToDisplaySize(renderer) {
+  //   const canvas = renderer.domElement;
+  //   const width = canvas.clientWidth;
+  //   const height = canvas.clientHeight;
+  //   const needResize = canvas.width !== width || canvas.height !== height;
+  //   if (needResize) {
+  //     renderer.setSize(width, height, false);
+  //   }
+  //   return needResize;
+  // }
+
+  // if (!renderer.vr.isPresenting() && resizeRendererToDisplaySize(renderer)) {
+  //   const canvas = renderer.domElement;
+  //   camera.aspect = canvas.clientWidth / canvas.clientHeight;
+  //   camera.updateProjectionMatrix();
+  // }
+
+
   //** grab glove info from endpointIDs */
 	//** [0] SOURCE_FILTERED_DEFAULT - LH */
 	//** [1] SOURCE_FILTERED_DEFAULT - RH */
@@ -1410,18 +1457,23 @@ function render() {
   //let range = 5 - radius;
 
   //scene.updateMatrixWorld();
+
   
-  for (let k = 0; k < stars.length; k++) {
-    let star = stars[k];
+  
+
+  for (let k = 0; k < ret.length; k++) {
+    let star = ret[k];
     star.rotation.x += 0.01*k/100;
     //star.rotation.y += 0.01/k;
-    star.rotation.z += 0.001*k/100;
+    star.rotation.z += 0.01*k/100;
     lightness > 100 ? lightness = 0 : lightness+=0.4; //++
     //let material = new THREE.MeshLambertMaterial( { color: new THREE.Color("hsl(" + H + ", 100%, 80%)" ), transparency: true, opacity: 0.4 } );
     //   planeMaterial.color.setHSL(object.userData.H,object.userData.S,object.userData.L);
     //star.material.color = new THREE.Color("hsl( 255, 100%, " + lightness + "%)");
     star.material.color.setHSL(255, 100, lightness);
   } 
+  
+
 
   let invertStage = new THREE.Matrix4()
   let temp = new THREE.Matrix4();

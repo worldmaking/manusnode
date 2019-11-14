@@ -102,7 +102,7 @@ let udpPort = new osc.UDPPort({
 
 		// This is where pi is listening for OSC messages.
 		remoteAddress: "192.168.137.125",//"192.168.137.108",//"192.168.0.14", //"192.168.1.117",//
-		remotePort: 2020,
+		remotePort: 3030,
 		metadata: true
 });
 
@@ -228,7 +228,7 @@ wss.on('connection', function(ws, req) {
 						  udpPort.send(bodyHaptics);
 
 							loop++
-						} while (loop<4);
+						} while (loop<1);
 			} else {
 				console.log("received message from client:", id, msg);
 			}
