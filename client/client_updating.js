@@ -1099,14 +1099,19 @@ function intersectHead() {
       // intersected.rotation.y += 0.5;
       // intersected.position.z -= 0.1;
       // let handRay = event.getObjectByName( 'handRay' );
-      if (intersected) {
-        try {
-          sock.send( "sendHaptics" );
-        } catch( e ) {
-          write( e );
-        }
-      }
-    
+
+      // haptics //
+      // //
+      // if ( intersected ) {
+      //   try {
+      //     sock.send( "sendHaptics" );
+      //   } catch( e ) {
+      //     write( e );
+      //   }
+      // }
+      // haptics //
+      // //    
+
     } else {
     
       if ( intersected ) intersected.material.emissive.setHex( intersected.currentHex );
@@ -1358,9 +1363,9 @@ function buildCreature() {
 
   this.findUser = function(bump) {
     let d = this.position.distanceTo(bump.position);
-    if ((d > 0) && (d < 1)) {
+    if ((d > 0) && (d < 2)) {
         try {
-          sock.send( "sendHaptics_back" );
+          //sock.send( "sendHaptics_back" );
         } catch( e ) {
           write( e )
         }
@@ -1435,7 +1440,7 @@ function render() {
   //** manage intersections */
   cleanIntersected();
   
-  getIntersections( leftWrist, rightWrist );
+  //getIntersections( leftWrist, rightWrist );
   //intersectObjectsL( leftWrist );
 
 
@@ -1506,6 +1511,8 @@ function render() {
     // c.flock(Creatures);
     // c.update();
     // c.display();
+
+    
     Creatures[k].checkEdges();
     Creatures[k].flock(Creatures);
     Creatures[k].update();
