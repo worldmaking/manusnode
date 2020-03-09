@@ -1,47 +1,7 @@
 
-
-//  // USEFUL QUATERNIONS //  // 
-// [w, x, y, z] = [cos(a/2), sin(a/2) * nx, sin(a/2)* ny, sin(a/2) * nz]
-// [x]       [y]       [z]       [w]      //** description */
-// [0]       [0]       [0]       [1]      //** identity */
-// [1]       [0]       [0]       [0]      //** 180 around X : pitch */
-// [0]       [1]       [0]       [0]      //** 180 around Y : yaw   */
-// [0]       [0]       [1]       [0]      //** 180 around Z : roll  */
-// [sq(.5)]  [0]       [0]       [sq(.5)] //** +90 around X : CW    */
-// [0]       [sq(.5)]  [0]       [sq(.5)] //** +90 around Y : CW    */
-// [0]       [0]       [sq(.5)]  [sq(.5)] //** +90 around Z : CW    */
-// [-sq(.5)] [0]       [0]       [sq(.5)] //** -90 around X : CCW   */
-// [0]       [-sq(.5)] [0]       [sq(.5)] //** -90 around Y : CCW   */
-// [0]       [0]       [-sq(.5)] [sq(.5)] //** -90 around Z : CCW   */
-
-// position [ x, y, z ] -> p = 0 + ix + jy + kz
-// orientation [ heading    q = cos(a/2) + ix sin(a/2)
-//                attitude               + jy sin(a/2)
-//                   bank ]              + kz sin(a/2)
-// rotation [ heading     q = cos(a/2) + ix sin(a/2)
-//             attitude                + jy sin(a/2)
-//                bank ]               + kz sin(a/2)
-// rotate point      4D ->  q * p * conj(q)
-// combine rotations 4D -> q1 * q2 
-//
-//  Pi -> vector before transform | Po -> vector after transform | q -> quaternion rep trans | conj() -> conjugate
-//
-// rotation ( around origin )               Po = q * Pi * conj( q )
-// reflection (in plane thorough origin )   Po = q * Pi * q
-// para component of plane                  Po = 1/2 ( Pi + q * Pi * q )
-// perp component of plane                  Po = 1/2 ( Pi -q * Pi * q )
-// scaling                                  Po = scalar * Pi (or comb w/rot or ref)
-// translation                              Po = q + Pi
-//
-//  local? !reverse -> q1 then q2 ? q1 * q2 -> global? reverse -> q2 * q1
-//
-
 //  //************************************************************************************************// VARIABLES  //  //
 //  //************************************************************************************************//
 //  //************************************************************************************************//
-
-//let Creature = require('./js/Creature.js');
-
 
 //group.visible = false;
 
@@ -1004,7 +964,6 @@ function getIntersections( event ) {
 
 }
 
-
 //  //********************************* // INTERSECT OBJECT // ***************************************//
 function intersectObjects( leftEvent, rightEvent ) {
   console.log('paint the sky')
@@ -1080,7 +1039,6 @@ function intersectObjects( leftEvent, rightEvent ) {
 
 }
 
-
 //  //********************************** // INTERSECT HEAD // ****************************************//
 function intersectHead() {
   
@@ -1151,6 +1109,7 @@ function checkRoom() {
   } 
 }
 
+//  //************************************ // CREATURES // ******************************************//
 function buildCreature() {
   this.position = new THREE.Vector3();
   this.velocity = new THREE.Vector3();
@@ -1440,7 +1399,7 @@ function render() {
   //** manage intersections */
   cleanIntersected();
   
-  //getIntersections( leftWrist, rightWrist );
+  getIntersections( leftWrist );
   //intersectObjectsL( leftWrist );
 
 
