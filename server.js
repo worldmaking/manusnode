@@ -74,6 +74,7 @@ app.use(express.static(client_path))
 app.get('/', function(req, res) {
 	res.sendFile(path.join(client_path, 'index.html'));
 });
+
 //app.get('*', function(req, res) { console.log(req); });
 const server = http.createServer(app);
 // add a websocket service to the http server:
