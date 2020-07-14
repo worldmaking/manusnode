@@ -69,3 +69,4 @@ ApolloSDK.dll
 ManusVR/
 build/
 .vscode/
+client/.vs
