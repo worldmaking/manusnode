@@ -24,7 +24,7 @@
   "dependencies": {
     "bindings": "^1.5.0",
     "boids.js": "0.0.3",
-    "express": "^4.17.1",
+    "express": "^4.17.3",
     "gl-matrix": "^3.3.0",
     "openvr": "0.0.0",
     "osc": "^2.4.1",
