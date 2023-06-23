@@ -27,7 +27,7 @@
     "express": "^4.17.3",
     "gl-matrix": "^3.3.0",
     "openvr": "0.0.0",
-    "osc": "^2.4.1",
+    "osc": "^2.4.4",
     "promise-socket": "^6.0.3",
     "stats.js": "^0.17.0",
     "three-quaternion-from-normal": "^1.0.0",
